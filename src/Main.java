@@ -1,8 +1,10 @@
 import scraper.DataReader;
+import scraper.proposal.RustRFC;
 import util.Log;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 
 public class Main {
 
@@ -27,7 +29,7 @@ public class Main {
 
         if(arguments.get("project").equals("rust")) {
             try {
-                //Read Data
+                Set<RustRFC> rfcs = DataReader.readRustProject(path);
             } catch (Exception e) {
                 Log.error("Failed reading data from rust project" + e);
                 System.exit(-1);
