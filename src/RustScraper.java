@@ -6,7 +6,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 
-public class Main {
+public class RustScraper {
 
     public static Map<String, String> arguments = new HashMap<>();
 
