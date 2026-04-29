@@ -18,13 +18,19 @@ import java.util.stream.Collectors;
 
 public class DataReader {
 
-    public static HashSet<RustRFC> readRustProject(String rootDirPath) throws IllegalArgumentException, IOException {
+    public static HashSet<RustRFC> readRustProject(String rootDirPath) throws IllegalArgumentException {
         Log.log("Begin parsing Rust RFCs");
 
         HashSet<RustRFC> rfcs = new HashSet<>();
 
         File rootDir = new File(rootDirPath);
-        File textDir = Objects.requireNonNull(rootDir.listFiles(file -> file.isDirectory() && file.getName().equals("text")))[0];
+        File textDir = null;
+
+        try {
+            textDir = Objects.requireNonNull(rootDir.listFiles(file -> file.isDirectory() && file.getName().equals("text")))[0];
+        } catch(Exception e) {
+            throw new IllegalArgumentException("Provided source directory does not have the correct structure");
+        }
 
         AtomicInteger success = new AtomicInteger();
         AtomicInteger failure = new AtomicInteger();
