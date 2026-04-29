@@ -1,5 +1,3 @@
-import util.Log;
-
 import java.io.File;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -11,13 +9,12 @@ public class ArgumentHandler {
     public static String[] validOptions = new String[]{"local", "remote", "project"};
     public static String[] validProjects = new String[]{"rust", "swift"};
 
-    public static Map<String, String> parseArgs(String[] args) {
+    public static Map<String, String> parseArgs(String[] args) throws IllegalArgumentException {
         Map<String, String> arguments = new HashMap<>();
 
 
-        if (args.length % 2 != 0) {
-            Log.error("Invalid number of arguments provided");
-            System.exit(-1);
+        if (args.length % 2 != 0 || args.length == 0) {
+            throw new IllegalArgumentException("Invalid number of arguments provided");
         }
 
         //Guaranteed to be divisible by 2
@@ -26,22 +23,14 @@ public class ArgumentHandler {
             String value = args[i+1];
 
             if(!option.startsWith("-")) {
-                Log.error("Malformed argument option: " + option);
+                throw new IllegalArgumentException("Malformed argument option: " + option);
             }
 
             option = option.substring(1);
 
-            //Make sure provided option is one that exists
-            String finalOption = option;
-            if(Arrays.stream(validOptions).noneMatch(opt -> Objects.equals(opt, finalOption))) {
-                Log.error("Unknown argument option: " + option);
-                System.exit(-1);
-            }
-
             //Layer of safety for later
             if(value == null) {
-                Log.error("Null value provided");
-                System.exit(-1);
+                throw new IllegalArgumentException("Null value provided");
             }
 
             arguments.put(option, value);
@@ -51,10 +40,21 @@ public class ArgumentHandler {
     }
 
     public static void validateOptions(Map<String, String> arguments) throws IllegalArgumentException {
+        arguments.forEach((arg, value) -> {
+            if(Arrays.stream(validOptions).noneMatch(opt -> Objects.equals(opt, arg))) {
+                throw new IllegalArgumentException("Unknown argument option: " + arg);
+            }
+        });
+
+        boolean hasLocal = arguments.containsKey("local");
+        boolean hasRemote = arguments.containsKey("remote");
+
         //One of these needs to be provided
-        if(arguments.containsKey("local")) {
+        if(hasLocal && hasRemote) {
+            throw new IllegalArgumentException("More than one source specified");
+        } else if(hasLocal) {
             validateLocal(arguments.get("local"));
-        } else if(arguments.containsKey("remote")) {
+        } else if(hasRemote) {
             validateRemote(arguments.get("remote"));
         } else {
             throw new IllegalArgumentException("Missing either local or remote path");
@@ -67,8 +67,7 @@ public class ArgumentHandler {
     private static void validateProject(String value) throws IllegalArgumentException {
         if(value == null) throw new IllegalArgumentException("Project must be specified");
         if(Arrays.stream(validProjects).noneMatch(project -> Objects.equals(project, value))) {
-            Log.error("Unsupported project type: " + value);
-            System.exit(-1);
+            throw new IllegalArgumentException("Unsupported project type: " + value);
         }
     }
 
