@@ -1,6 +1,7 @@
 plugins {
     id 'java'
     id 'application'
+    id 'jacoco'
 }
 
 version = '1.0-SNAPSHOT'
@@ -26,13 +27,27 @@ application {
     mainClass = 'RustScraper'
 }
 
+jacoco {
+    toolVersion = "0.8.14"
+}
+
 test {
     useJUnitPlatform()
 
     dependsOn 'cleanTest'
+    finalizedBy jacocoTestReport
 
     testLogging {
         events "passed", "skipped", "failed"
+    }
+}
+
+jacocoTestReport {
+    dependsOn test
+
+    reports {
+        xml.required = false
+        csv.required = false
     }
 }
 
