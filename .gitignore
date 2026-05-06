@@ -156,4 +156,6 @@ vite.config.ts.timestamp-*
 # Built Visual Studio Code Extensions
 *.vsix
 
+cache/
+data/
 test.ts
