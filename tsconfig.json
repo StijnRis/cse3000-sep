@@ -1,0 +1,9 @@
+{
+    "compilerOptions": {
+        "module": "nodenext",
+        "types": ["node", "fs-extra"],
+        "allowImportingTsExtensions": true,
+        "rewriteRelativeImportExtensions": true,
+        "declaration": true
+    }
+}
