@@ -1,16 +1,19 @@
 package scraper.data;
 
 import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 @Getter
 @Setter
 @Entity
+@NoArgsConstructor
+@AllArgsConstructor
 @Table(name = "Project")
 public class Project {
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "project_id", nullable = false)
     private Integer id;
 
@@ -25,11 +28,4 @@ public class Project {
     @Lob
     @Column(name = "copyright", nullable = false)
     private String copyright;
-
-
-    public Project(String projectName, String enhancementProposalName, String copyright) {
-        this.projectName = projectName;
-        this.enhancementProposalName = enhancementProposalName;
-        this.copyright = copyright;
-    }
 }

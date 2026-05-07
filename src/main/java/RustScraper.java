@@ -1,6 +1,6 @@
 import org.hibernate.Session;
 import org.hibernate.Transaction;
-import scraper.RustDataReader;
+import scraper.parser.rust.RustDataReader;
 import scraper.data.Project;
 import util.HibernateUtil;
 import util.Log;
@@ -36,10 +36,10 @@ public class RustScraper {
         String dbPath = rootFolder + "../dataset.sqlite";
         clearOldData(dbPath);
 
-        Project project = new Project("Unspecified", "X", "NONE");
+        Project project = new Project(999, "Unspecified", "X", "NONE");
 
         if(arguments.get("project").equals("rust")) {
-            project = new Project("Rust", "RFC", "TBD");
+            project = new Project(5, "Rust", "RFC", "MIT or Apache-2.0");
         }
 
         db2 = new HibernateUtil(dbPath);
@@ -49,16 +49,17 @@ public class RustScraper {
         //Project must already persist in database due to autogeneration of index and dependency on this.
         s.persist(project);
         tx.commit(); //Generate internal ids for proposals, otherwise PK violation below.
-        tx = s.beginTransaction();
 
         //Read Data
         try {
-            dr = new RustDataReader(project);
-            dr.readProject(rootFolder);
+            dr = new RustDataReader(s, project, rootFolder);
+            dr.readProjectMarkdownFiles();
         } catch (Exception e) {
             Log.error("Failed reading data from rust project: " + e);
             System.exit(-1);
         }
+
+        tx = s.beginTransaction();
 
         //Dont use lambdas because db locks
         for (int i = 0; i < dr.getProposals().size(); i++) {
@@ -66,7 +67,6 @@ public class RustScraper {
         }
 
         tx.commit(); //Generate internal ids for proposals, otherwise PK violation below.
-
         tx = s.beginTransaction();
 
         for (int i = 0; i < dr.getProposalRevisions().size(); i++) {
@@ -74,6 +74,14 @@ public class RustScraper {
         }
 
         tx.commit();
+        tx = s.beginTransaction();
+
+        for (int i = 0; i < dr.getRevisionAuthors().size(); i++) {
+            s.persist(dr.getRevisionAuthors().get(i));
+        }
+
+        tx.commit();
+
         s.close();
     }
 

@@ -1,7 +1,9 @@
 package scraper.data.proposal.revision;
 
 import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.hibernate.annotations.OnDelete;
 import org.hibernate.annotations.OnDeleteAction;
@@ -10,6 +12,8 @@ import scraper.data.author.Person;
 @Getter
 @Setter
 @Entity
+@NoArgsConstructor
+@AllArgsConstructor
 @Table(name = "ProposalRevisionAuthor")
 public class ProposalRevisionAuthor {
     @EmbeddedId

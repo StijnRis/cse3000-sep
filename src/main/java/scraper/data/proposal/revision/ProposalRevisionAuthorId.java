@@ -3,14 +3,14 @@ package scraper.data.proposal.revision;
 import jakarta.persistence.Column;
 import jakarta.persistence.Embeddable;
 import jakarta.persistence.Lob;
-import lombok.EqualsAndHashCode;
-import lombok.Getter;
-import lombok.Setter;
+import lombok.*;
 
 import java.io.Serializable;
 
 @Getter
 @Setter
+@NoArgsConstructor
+@AllArgsConstructor
 @EqualsAndHashCode
 @Embeddable
 public class ProposalRevisionAuthorId implements Serializable {
@@ -27,6 +27,4 @@ public class ProposalRevisionAuthorId implements Serializable {
 
     @Column(name = "author_id", nullable = false)
     private Integer authorId;
-
-
 }

@@ -1,18 +1,33 @@
-package scraper;
+package scraper.parser.rust;
 
 import lombok.Getter;
+import org.eclipse.jgit.api.Git;
+import org.eclipse.jgit.diff.DiffEntry;
+import org.eclipse.jgit.diff.RenameDetector;
+import org.eclipse.jgit.lib.Constants;
+import org.eclipse.jgit.lib.ObjectId;
+import org.eclipse.jgit.lib.ObjectLoader;
+import org.eclipse.jgit.lib.Repository;
+import org.eclipse.jgit.revwalk.RevCommit;
+import org.eclipse.jgit.revwalk.RevTree;
+import org.eclipse.jgit.storage.file.FileRepositoryBuilder;
+import org.eclipse.jgit.treewalk.TreeWalk;
+import org.eclipse.jgit.treewalk.filter.PathFilter;
+import org.hibernate.Session;
 import scraper.data.*;
 import scraper.data.proposal.Proposal;
 import scraper.data.proposal.ProposalId;
 import scraper.data.proposal.revision.ProposalRevision;
+import scraper.data.proposal.revision.ProposalRevisionAuthor;
 import scraper.data.proposal.revision.ProposalRevisionId;
 import util.Log;
+import util.LogFollowCommand;
 
-import java.io.File;
-import java.io.FileReader;
+import java.io.*;
 import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.sql.Date;
 import java.time.LocalDate;
 import java.util.*;
@@ -22,20 +37,30 @@ import java.util.stream.Collectors;
 public class RustDataReader {
 
     @Getter
-    private Project project;
-
-    @Getter
     private List<Proposal> proposals = new ArrayList<>();
 
     @Getter
     private List<ProposalRevision> proposalRevisions = new ArrayList<>();
 
-    public RustDataReader(Project project) {
+    @Getter
+    private List<ProposalRevisionAuthor> revisionAuthors = new ArrayList<>();
+
+    private Session session;
+    private Project project;
+    private String rootDirPath;
+    private int authorIndex = 5000000; //Assigned project id (5) * 1 million
+
+    public RustDataReader(Session session, Project project, String rootDirPath) {
+        this.session = session;
         this.project = project;
+        this.rootDirPath = rootDirPath;
     }
 
-    public void readProject(String rootDirPath) throws IllegalArgumentException {
-        Log.log("Begin parsing Rust RFCs");
+    /**
+     * Reads all RustRFCs to build a proposal list. Expects a directory to be set from the constructor using the layout in the rfcs repository.
+     */
+    public void readProjectMarkdownFiles() throws IllegalArgumentException {
+        Log.log("RFC Parsing: Collecting Files");
 
         HashSet<Proposal> rfcs = new HashSet<>();
 
@@ -53,14 +78,14 @@ public class RustDataReader {
 
         Arrays.stream(Objects.requireNonNull(textDir.listFiles())).forEach(file -> {
             //temporary for during coding
-            if(success.get() + failure.get() < 10) {
+            if(success.get() + failure.get() < 3) {
 
-                Log.log("RFC Parsing -> Started on " + file.getName());
+                Log.log("RFC Parsing: Started on " + file.getName());
 
                 if (file.isFile()) {
                     Proposal rfc = null;
                     try {
-                        parseRustRFC(file, project);
+                        parseRustRFC(file);
                         success.getAndIncrement();
                     } catch (Exception e) {
                         Log.warn("Could not parse RFC File: " + file.getName());
@@ -76,17 +101,49 @@ public class RustDataReader {
         double r = (double) f / (s+f);
 
         //Metric reporting for my own debugging of the parser
-        Log.log(String.format("RFC Parsing -> %s completed, %s failed. Failure rate: %s", s, f, r));
+        Log.log(String.format("RFC Parsing: %s completed, %s failed. Failure rate: %s", s, f, r));
     }
 
-    public void parseRustRFC(File file, Project project) throws Exception {
+    /**
+     * Parses an RFC file into a Proposal with associated revision history & data.
+     * @param file Expects File pointing to a markdown file in the format of Rust RFCs
+     */
+    public void parseRustRFC(File file) throws Exception {
+        //i am not dealing with a single duplicate proposal_id due to a moved issue.
+        if(file.getName().contains("2071-impl-trait-type-alias")) return;
+
+
+        Proposal proposal = createProposalFromLastState(file);
+
+        RustDataParser parser = new RustDataParser(
+                session,
+                project,
+                proposal,
+                rootDirPath,
+                "text/" + file.getName(),
+                authorIndex
+        );
+
+        List<ProposalRevision> revisions = parser.createRevisionHistory();
+        authorIndex = parser.authorIndex;
+
+        proposal.setProposer(
+                parser.getRevisionAuthors().getLast().getAuthor()
+        );
+
+        proposals.add(proposal);
+        proposalRevisions.addAll(revisions);
+        revisionAuthors.addAll(parser.getRevisionAuthors());
+    }
+
+    /**
+     * Proposal Entity needs some data to be created, using the HEAD of Git history as the most recent status.
+     */
+    private Proposal createProposalFromLastState(File file) throws Exception {
         FileReader proposalReader = new FileReader(file);
         List<String> lines = proposalReader.readAllLines();
 
         String featureName = null;
-        Date timestamp = null;
-        List<URL> rfcPrs = List.of();
-        List<URL> trackingIssues = List.of();
 
         //Iterate through all lines
         for (int i = 0; i < lines.size() ; i++) {
@@ -96,20 +153,7 @@ public class RustDataReader {
 
             if(lineLC.startsWith("feature name")) {
                 featureName = extractFeatureName(line);
-            }
-
-            if(lineLC.startsWith("start date")) {
-                timestamp = extractStartDate(line);
-            }
-
-            if(lineLC.startsWith("rfc pr")) {
-                lineLC = lineLC.replace("rfc pr: ", "");
-                rfcPrs = parseMarkdownURLs(lineLC);
-            }
-
-            if(lineLC.startsWith("rust issue") || lineLC.startsWith("tracking issue")) {
-                lineLC = lineLC.replace("rust issue: ", "").replace("tracking issue", "");
-                trackingIssues = parseMarkdownURLs(lineLC);
+                break;
             }
         }
 
@@ -120,53 +164,11 @@ public class RustDataReader {
 
         ProposalId pId = new ProposalId(project.getId(), extractFeatureId(file.getName()));
 
-        Proposal proposal = new Proposal(pId,
+        return new Proposal(pId,
                 project,
                 null,
-                "Yeet",
-                "Yote");
-
-        ProposalRevisionId pRevId = new ProposalRevisionId(
-                project.getId(),
-                proposal.getId().getProposalId(),
-                0);
-
-        ProposalRevision pRev = new ProposalRevision(pRevId,
-                proposal,
                 featureName,
-                timestamp,
-                "",
-                "");
-
-        proposals.add(proposal);
-        proposalRevisions.add(pRev);
-    }
-
-    private static List<URL> parseMarkdownURLs(String line) throws MalformedURLException {
-        String[] linkedPrs = line.split(", ");
-
-        List<URL> prs = new ArrayList<>();
-        for (int i = 0; i < linkedPrs.length; i++) {
-            String url = parseMarkdownURL(linkedPrs[i]);
-
-            if(url.startsWith("http")) {
-                prs.add(URI.create(url).toURL());
-            }
-        }
-
-        return prs;
-    }
-
-    private static String parseMarkdownURL(String text) {
-        return text.replaceFirst("\\[.*\\]", "").replace("(", "").replace(")", "");
-    }
-
-    private static Date extractStartDate(String line) throws Exception {
-        String[] asText = line.toLowerCase().replace("start date: ", "").split("-");
-        if(asText.length != 3) throw new Exception("Failed parsing date: " + line);
-
-        LocalDate date = LocalDate.of(Integer.parseInt(asText[0]), Integer.parseInt(asText[1]), Integer.parseInt(asText[2]));;
-        return Date.valueOf(date);
+                "?");
     }
 
     private static String extractFeatureId(String filename) {
