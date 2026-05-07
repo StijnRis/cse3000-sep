@@ -3,7 +3,7 @@ import { XMLParser } from 'fast-xml-parser';
 import { readFileSync, existsSync } from 'node:fs';
 import efs from 'fs-extra';
 const { outputFileSync } = efs;
-import type { GithubUser, GithubComment, GithubCommentJSON } from './types.d.ts';
+import type { SEP, GithubUser, GithubComment, GithubCommentJSON } from './types.d.ts';
 
 /**
  * Fetch page of given URL
@@ -97,3 +97,26 @@ export const parseGithubCommentJSON = async ({
   created: new Date(created_at),
   body,
 });
+
+/**
+ * Groups SEPs by the ID of their latest revision
+ * @param seps all SEPs; superseders must also be present
+ * @returns map with lists of SEPs grouped by the ID of the final superseder, each sorted by ID descending
+ */
+export const groupByFinalID = <A,T,S,C, SEP_T extends SEP<A,T,S,C>>(seps: SEP_T[]): Map<SEP_T['id'], SEP_T[]> => {
+  const byID = new Map<SEP_T['id'], SEP_T>();
+  for(const sep of seps) {
+    byID.set(sep.id, sep);
+  }
+  const res = new Map<SEP_T['id'], SEP_T[]>();
+  for(const sep of seps) {
+    let parent = sep;
+    while(parent.supersederID !== undefined) parent = byID.get(parent.supersederID)!;
+    if(!res.has(parent.id)) res.set(parent.id, []);
+    res.get(parent.id)!.push(sep);
+  }
+  for(const group of res.values()) {
+    group.sort(({id: id1}, {id: id2}) => id2 - id1);
+  }
+  return res;
+};

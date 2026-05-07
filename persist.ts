@@ -1,13 +1,78 @@
-import { JEP } from "./jep-scraper.ts";
-import { isGithubComment, NEP } from "./nep-scraper.ts";
-import type { CommentSQL, PersonSQL, PersonUsernameSQL, ProjectSQL, ProposalRevisionAuthorSQL, ProposalRevisionSQL, ProposalSQL } from "./types.d.ts";
+import { existsSync, unlinkSync } from 'node:fs';
+import { groupByFinalID } from "./common.ts";
+import type { JEP } from "./jep-scraper.ts";
+import { isGithubComment } from "./nep-scraper.ts";
+import type { NEP } from "./nep-scraper.ts";
 
-export class Database {
+type ProjectSQL = {
+  project_id: number,
+  project_name: string,
+  enhancement_proposal_name: string,
+  copyright: string,
+};
+
+type PersonSQL = {
+  person_id: number,
+};
+
+type PersonUsernameSQL = {
+  person_id: number, //fk
+  domain: string,
+  username: string,
+  real_name: string,
+};
+
+type ProposalSQL = {
+  project_id: number, //fk
+  proposal_id: string,
+  proposer_id?: number, //fk'
+  topic?: string,
+  proposal_type?: string,
+};
+
+type ProposalRevisionSQL = {
+  project_id: number, //fk'
+  proposal_id: string, //fk'
+  revision_index: number,
+  title: string,
+  created_at: Date,
+  content: string,
+  implemented_at_version?: string,
+};
+
+type StageHistorySQL = {
+  project_id: number, //fk'
+  proposal_id: string, //fk'
+  stage_index: number,
+  normalised_status: 'accepted' | 'rejected' | 'draft' | 'review' | 'withdrawn' | 'superseded' | 'active' | 'unknown',
+  raw_status?: string,
+  created_at: Date,
+};
+
+type ProposalRevisionAuthorSQL = { //many to many
+  project_id: number, //fk'
+  proposal_id: string, //fk'
+  revision_index: number, //fk'
+  author_id: number, //fk
+};
+
+type CommentSQL = {
+  comment_id: number,
+  author_id: number, //fk
+  project_id: number, //fk'
+  proposal_id: string, //fk'
+  comment_on_comment_id?: number, //fk''
+  created_at: Date,
+  content: string,
+};
+
+class Database {
   project = new Map<number/*project_id*/, ProjectSQL>();
   person = new Map<number/*person_id*/, PersonSQL>();
   person_username = new Map<[number/*person_id*/, string/*domain*/, string/*username*/], PersonUsernameSQL>();
   proposal = new Map<[number/*project_id*/, string/*proposal_id*/], ProposalSQL>();
   proposal_revision = new Map<[number/*project_id*/, string/*proposal_id*/, number/*revision_index*/], ProposalRevisionSQL>();
+  stage_history = new Map<[number/*project_id*/, string/*proposal_id*/, number/*stage_index*/], StageHistorySQL>();
   proposal_revision_author: ProposalRevisionAuthorSQL[] = [];
   comment = new Map<[number/*project_id*/, string/*proposal_id*/, number/*comment_id*/], CommentSQL>();
 }
@@ -38,6 +103,7 @@ abstract class Persister<SEP_T> {
       real_name: name,
     });
   }
+  abstract normalizeStatus(status: string | undefined): StageHistorySQL['normalised_status'];
   abstract persistPeople(seps: SEP_T[]): void;
   abstract persistSEPs(seps: SEP_T[]): void;
   persist(seps: SEP_T[]): Database {
@@ -56,6 +122,24 @@ export class JEPPersister extends Persister<JEP> {
     enhancement_proposal_name: 'JEP',
     copyright: 'GPLv2',
   };
+  normalizeStatus(status: JEP['status']): StageHistorySQL['normalised_status'] {
+    return status ? (({
+      'Draft': 'draft',
+      'Posted': 'review',
+      'Submitted': 'review',
+      'Candidate': 'review',
+      'Funded': 'review',
+      'Completed': 'accepted',
+      'Withdrawn': 'withdrawn',
+      'Rejected': 'rejected',
+      'Active': 'active',
+      'Closed / Delivered': 'accepted',
+      'Closed / Withdrawn': 'withdrawn',
+      'Proposed to Target': 'accepted',
+      'Integrated': 'accepted',
+      'Targeted': 'review',
+    } as const)[status] || 'unknown') : 'unknown';
+  }
   persistPeople(jeps: JEP[]) {
     for(const jep of jeps) {
       if(jep.owner) this.addPerson(jep.owner.username, jep.owner.name, openjdkDomain);
@@ -64,40 +148,52 @@ export class JEPPersister extends Persister<JEP> {
     }
   }
   persistSEPs(jeps: JEP[]) {
-    for(const jep of jeps) {
-      const id = `${jep.id}`;
+    const byFinal = groupByFinalID(jeps);
+    for(const [fid, group] of byFinal) {
+      const id = `${fid}`;
+      const final = group[group.length - 1];
       this.db.proposal.set([this.projID(), id], {
         project_id: this.projID(),
         proposal_id: id,
-        proposer_id: jep.owner ? this.usernameToID.get([openjdkDomain, jep.owner.username]) : undefined,
-        proposal_type: jep.type,
+        proposer_id: final.owner ? this.usernameToID.get([openjdkDomain, final.owner.username]) : undefined,
+        proposal_type: final.type,
       });
-      this.db.proposal_revision.set([this.projID(), id, 0], {
-        project_id: this.projID(),
-        proposal_id: id,
-        revision_index: 0,
-        title: jep.title,
-        created_at: jep.created,
-        content: jep.content,
-      });
-      for(const author of jep.authors) {
-        this.db.proposal_revision_author.push({
+      group.forEach((jep, idx) => {
+        this.db.proposal_revision.set([this.projID(), id, idx], {
           project_id: this.projID(),
           proposal_id: id,
-          revision_index: 0,
-          author_id: this.usernameToID.get([realNameDomain, author])!,
+          revision_index: idx,
+          title: jep.title,
+          created_at: jep.created,
+          content: jep.content,
         });
-      }
-      for(const comment of jep.comments) {
-        this.db.comment.set([this.projID(), id, comment.id], {
+        for(const author of jep.authors) {
+          this.db.proposal_revision_author.push({
+            project_id: this.projID(),
+            proposal_id: id,
+            revision_index: idx,
+            author_id: this.usernameToID.get([realNameDomain, author])!,
+          });
+        }
+        this.db.stage_history.set([this.projID(), id, idx], {
           project_id: this.projID(),
-          comment_id: comment.id,
-          author_id: this.usernameToID.get([openjdkDomain, comment.author.username])!,
           proposal_id: id,
-          created_at: comment.created,
-          content: comment.content,
+          stage_index: idx,
+          normalised_status: this.normalizeStatus(jep.status),
+          raw_status: jep.status,
+          created_at: jep.created,
         });
-      }
+        for(const comment of jep.comments) {
+          this.db.comment.set([this.projID(), id, comment.id], {
+            project_id: this.projID(),
+            comment_id: comment.id,
+            author_id: this.usernameToID.get([openjdkDomain, comment.author.username])!,
+            proposal_id: id,
+            created_at: comment.created,
+            content: comment.content,
+          });
+        }
+      });
     }
   }
 }
@@ -107,8 +203,20 @@ export class NEPPersister extends Persister<NEP> {
     project_id: 2,
     project_name: 'NumPy',
     enhancement_proposal_name: 'NEP',
-    copyright: 'GPLv2',
+    copyright: 'Public Domain',
   };
+  normalizeStatus(status: NEP['status']): StageHistorySQL["normalised_status"] {
+    return ({
+      'Draft': 'review',
+      'Active': 'active',
+      'Accepted': 'accepted',
+      'Deferred': 'withdrawn',
+      'Rejected': 'rejected',
+      'Withdrawn': 'withdrawn',
+      'Final': 'accepted',
+      'Superseded': 'superseded',
+    } as const)[status] || 'unknown';
+  }
   persistPeople(neps: NEP[]) {
     for(const nep of neps) {
       for(const author of nep.authors) {
@@ -122,35 +230,54 @@ export class NEPPersister extends Persister<NEP> {
     }
   }
   persistSEPs(neps: NEP[]) {
-    for(const nep of neps) {
-      const id = `${nep.id}`;
+    const byFinal = groupByFinalID(neps);
+    for(const [fid, group] of byFinal) {
+      const id = `${fid}`;
+      const final = group[group.length - 1];
       this.db.proposal.set([this.projID(), id], {
         project_id: this.projID(),
         proposal_id: id,
-        proposal_type: nep.type,
+        proposal_type: final.type,
       });
-      this.db.proposal_revision.set([this.projID(), id, 0], {
-        project_id: this.projID(),
-        proposal_id: id,
-        revision_index: 0,
-        title: nep.title,
-        created_at: nep.created,
-        content: nep.content,
-      });
-      for(const author of nep.authors) {
-
-      }
-      nep.comments.forEach((comment, i) => {
-        this.db.comment.set([this.projID(), id, i], {
+      group.forEach((nep, idx) => {
+        this.db.proposal_revision.set([this.projID(), id, idx], {
           project_id: this.projID(),
-          comment_id: isGithubComment(comment) ? comment.id : i,
-          author_id: this.usernameToID.get(isGithubComment(comment)
-            ? [githubDomain, comment.author.login]
-            : [emailDomain, comment.author.email])!,
           proposal_id: id,
-          created_at: comment.created,
-          comment_on_comment_id: isGithubComment(comment) ? comment.reply_to : undefined,
-          content: comment.body,
+          revision_index: idx,
+          title: nep.title,
+          created_at: nep.created,
+          content: nep.content,
+        });
+        for(const author of nep.authors) {
+          this.db.proposal_revision_author.push({
+            project_id: this.projID(),
+            proposal_id: id,
+            revision_index: idx,
+            author_id: this.usernameToID.get(author.email === undefined
+              ? [realNameDomain, author.name]
+              : [emailDomain, author.email])!,
+          });
+        }
+        this.db.stage_history.set([this.projID(), id, idx], {
+          project_id: this.projID(),
+          proposal_id: id,
+          stage_index: idx,
+          normalised_status: this.normalizeStatus(nep.status),
+          raw_status: nep.status,
+          created_at: nep.created,
+        });
+        nep.comments.forEach((comment, i) => {
+          this.db.comment.set([this.projID(), id, i], {
+            project_id: this.projID(),
+            comment_id: isGithubComment(comment) ? comment.id : i,
+            author_id: this.usernameToID.get(isGithubComment(comment)
+              ? [githubDomain, comment.author.login]
+              : [emailDomain, comment.author.email])!,
+            proposal_id: id,
+            created_at: comment.created,
+            comment_on_comment_id: isGithubComment(comment) ? comment.reply_to : undefined,
+            content: comment.body,
+          });
         });
       });
     }

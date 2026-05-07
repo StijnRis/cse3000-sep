@@ -1,4 +1,5 @@
-import { scrapeJEP, collectIDsJEP, getSupersederJEPs, JEP, OpenJDKUser } from "./jep-scraper.ts";
+import { scrapeJEP, collectIDsJEP, getSupersederJEPs } from "./jep-scraper.ts";
+import type { JEP } from "./jep-scraper.ts";
 import { JEPPersister } from "./persist.ts";
 
 const jepIDs = await collectIDsJEP();
@@ -11,4 +12,5 @@ for(const id of jepIDs) {
   jeps.push(jep);
   console.log(`Successfully scraped JEP ${jep.id}`);
 }
-const jepDB = new JEPPersister().persist(jeps);
+console.log(jeps.filter(j => j.status === 'Targeted').map(j => j.id));
+// const jepDB = new JEPPersister().persist(jeps);

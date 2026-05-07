@@ -25,7 +25,7 @@ export const collectIDsJEP = async (): Promise<number[]> => {
 
 const jepTypes = ['Feature', 'Research', 'Infrastructure', 'Process', 'Informational'] as const;
 type JEPType = typeof jepTypes[number];
-const jepStates = ['Draft', 'Posted', 'Submitted', 'Candidate', 'Funded', 'Completed', 'Withdrawn', 'Rejected', 'Active', 'Closed / Delivered', 'Closed / Withdrawn', 'Proposed to Target', undefined] as const;
+const jepStates = ['Draft', 'Posted', 'Submitted', 'Candidate', 'Funded', 'Completed', 'Withdrawn', 'Rejected', 'Active', 'Closed / Delivered', 'Closed / Withdrawn', 'Proposed to Target', 'Integrated', 'Targeted', undefined] as const;
 type JEPStatus = typeof jepStates[number];
 export type OpenJDKUser = {
   username: string,
@@ -172,7 +172,10 @@ export const getSupersederJEPs = async () => {
 };
 
 /**
- * Scrapes all JEPs
+ * Scrapes JEP with given ID
+ * @param id ID
+ * @param supersederID ID of direct superseder if any
+ * @param saveDir directory to save result; leave undefined for no saving
  */
 export const scrapeJEP = async (id: number, supersederID?: number, saveDir?: string): Promise<JEP> => {
   console.log(`Fetching JEP ${id}`);
