@@ -4,9 +4,9 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "scrape-jep": "node --env-file-if-exists=.env jep.ts",
-    "scrape-nep": "node --env-file-if-exists=.env nep.ts",
-    "test": "node --env-file-if-exists=.env test.ts"
+    "scrape-jep": "tsc && node --env-file-if-exists=.env build/jep.js",
+    "scrape-nep": "tsc && node --env-file-if-exists=.env build/nep.js",
+    "test": "tsc && node --env-file-if-exists=.env build/test.js"
   },
   "keywords": [],
   "author": "",
@@ -16,6 +16,8 @@
     "fast-xml-parser": "^5.7.3",
     "fs-extra": "^11.3.5",
     "node-html-parser": "^7.1.0",
+    "reflect-metadata": "^0.2.2",
+    "sqlite3": "^5.0.3",
     "typeorm": "^0.3.28"
   },
   "devDependencies": {

@@ -160,3 +160,4 @@ cache*/
 data/
 test.ts
 *.db
+build/

@@ -1,9 +1,17 @@
 {
     "compilerOptions": {
+        "target": "esnext",
         "module": "nodenext",
+        "moduleResolution": "nodenext",
         "types": ["node", "fs-extra"],
+        "rootDir": "./src",
+        "outDir": "./build",
+        "strict": true,
         "allowImportingTsExtensions": true,
         "rewriteRelativeImportExtensions": true,
-        "declaration": true
+        "experimentalDecorators": true,
+        "emitDecoratorMetadata": true,
+        "isolatedModules": true,
+        "strictPropertyInitialization": false
     }
 }

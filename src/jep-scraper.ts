@@ -3,7 +3,7 @@ import { XMLParser } from "fast-xml-parser";
 import efs from 'fs-extra';
 const { outputJSONSync } = efs;
 import { fetchHTMLParsed, fetchXMLParsed } from "./common.ts";
-import type { SEP } from './types.d.ts';
+import type { SEP } from '../types.d.ts';
 
 //NOTE: all JEPs have issue IDs (long number), they get a JEP ID (short number) when they pass the draft phase
 const jepBaseURL = 'openjdk.org/jeps/';

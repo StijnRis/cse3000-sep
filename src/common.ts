@@ -3,7 +3,7 @@ import { XMLParser } from 'fast-xml-parser';
 import { readFileSync, existsSync } from 'node:fs';
 import efs from 'fs-extra';
 const { outputFileSync } = efs;
-import type { SEP, GithubUser, GithubComment, GithubCommentJSON } from './types.d.ts';
+import type { SEP, GithubUser, GithubComment, GithubCommentJSON } from '../types.d.ts';
 
 /**
  * Fetch page of given URL
