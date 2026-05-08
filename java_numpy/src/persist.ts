@@ -171,6 +171,11 @@ abstract class Persister<SEP_T> {
   abstract normalizeStatus(status: string | undefined): StageHistorySQL['normalised_status'];
   abstract persistPeople(seps: SEP_T[]): void;
   abstract persistSEPs(seps: SEP_T[]): void;
+  /**
+   * Persists a collection of SEPs into an intermediate memory-based database
+   * @param seps collection of SEPs
+   * @returns in-memory database, must then be dumped into real DB
+   */
   persist(seps: SEP_T[]): Database {
     // first populate with all the people that can be found
     this.persistPeople(seps);
@@ -389,6 +394,11 @@ export const dataSource = async (database: string): Promise<DataSource> => {
   return db;
 };
 
+/**
+ * Dumps in-memory DB into real DB
+ * @param dataSource real DB
+ * @param db in-memory DB
+ */
 export const dumpDatabase = async (dataSource: DataSource, db: Database) => {
   await dataSource.getRepository(ProjectSQL).save(db.project.values().toArray());
   await dataSource.getRepository(PersonSQL).save(db.person.values().toArray());

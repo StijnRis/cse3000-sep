@@ -15,10 +15,11 @@ const jepPrintableURL = (issueID: number) => `${jepIssueBaseURL}si/jira.issuevie
 
 /**
  * Fetch IDs of all JEPs
+ * @param cacheDir cache folder, empty for no caching
  * @returns all IDs findable from the main page
  */
-export const collectIDsJEP = async (): Promise<number[]> => {
-  const doc = await fetchHTMLParsed(`${jepBaseURL}0`);
+export const collectIDsJEP = async (cacheDir: string): Promise<number[]> => {
+  const doc = await fetchHTMLParsed(`${jepBaseURL}0`, cacheDir);
   return doc.querySelectorAll('.jep')
     .map(h => parseInt(h.text));
 };
@@ -101,10 +102,12 @@ const getJEPXMLField = (xml: JEPXML, fieldName: string): any[] | undefined => xm
 /**
  * Extract JEP details from its openjdk.org page
  * @param id JEP ID number
+ * @param supersederID ID of direct superseder JEP if any
  * @param html full HTML page (openjdk.org/jeps/xxx)
+ * @param cacheDir cache folder, empty for no caching
  * @returns JEP object
  */
-const parseJEP = async (id: number, supersederID: number | undefined, html: HTMLElement): Promise<JEP> => {
+const parseJEP = async (id: number, supersederID: number | undefined, html: HTMLElement, cacheDir: string): Promise<JEP> => {
 //   const fullTitle = html.getElementById('main')!.querySelector('h1')!.text;
   const metadata: {
     'Author'?: HTMLElement,
@@ -122,10 +125,10 @@ const parseJEP = async (id: number, supersederID: number | undefined, html: HTML
       .map(row => row.getElementsByTagName('td').map((h, i) => i === 0 ? h.text : h))
   );
   const issueID = parseInt(metadata['Issue'].text);
-  const issueXML = await fetchXMLParsed(jepXMLURL(issueID), jepXMLParser);
+  const issueXML = await fetchXMLParsed(jepXMLURL(issueID), jepXMLParser, cacheDir);
   const jepXML: JEPXML = issueXML.rss.channel.item;
   const type = getJEPXMLField(jepXML, 'JEP Type')![0]['#text'];
-  const printablePage = await fetchHTMLParsed(jepPrintableURL(issueID));
+  const printablePage = await fetchHTMLParsed(jepPrintableURL(issueID), cacheDir);
   const ownerCell = printablePage.querySelectorAll('table.grid')[1].querySelector('span.user-hover');
   const comments = parseJEPComments(printablePage);
   return {
@@ -151,10 +154,11 @@ const parseJEP = async (id: number, supersederID: number | undefined, html: HTML
 /**
  * Finds JEPs which directly supersede previous JEPs (later previews or incubators)
  * Assumes that JEPs in a superseding relation have the same title up to the "(nth Preview)" suffix
+ * @param cacheDir cache folder, empty for no caching
  * @returns map from IDs to their superseders
  */
-export const getSupersederJEPs = async () => {
-  const frontPage = await fetchHTMLParsed(`${jepBaseURL}0`);
+export const getSupersederJEPs = async (cacheDir: string) => {
+  const frontPage = await fetchHTMLParsed(`${jepBaseURL}0`, cacheDir);
   const idTitles = frontPage.querySelectorAll('.jeps')
     .flatMap(j => j.querySelectorAll('tr'))
     .map(h => [parseInt(h.querySelector('.jep')!.text), h.querySelector('a')!.text] as [number, string])
@@ -175,13 +179,14 @@ export const getSupersederJEPs = async () => {
  * Scrapes JEP with given ID
  * @param id ID
  * @param supersederID ID of direct superseder if any
+ * @param cacheDir cache folder, empty for no caching
  * @param saveDir directory to save result; leave undefined for no saving
  */
-export const scrapeJEP = async (id: number, supersederID?: number, saveDir?: string): Promise<JEP> => {
+export const scrapeJEP = async (id: number, supersederID: number | undefined, cacheDir: string, saveDir?: string): Promise<JEP> => {
   console.log(`Fetching JEP ${id}`);
-  const page = await fetchHTMLParsed(jepURL(id));
+  const page = await fetchHTMLParsed(jepURL(id), cacheDir);
   console.log(`Fetching comments of JEP ${id}`);
-  const jep = await parseJEP(id, supersederID, page);
+  const jep = await parseJEP(id, supersederID, page, cacheDir);
   if(saveDir !== undefined) {
     outputJSONSync(`data/${saveDir}/${jep.id}.json`, jep, { encoding: 'utf8', spaces: 2 });
   }

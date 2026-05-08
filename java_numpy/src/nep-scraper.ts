@@ -11,8 +11,8 @@ const nepBaseURL = 'numpy.org/neps/';
  * Fetch URLs of all NEPs
  * @returns all URLs findable from the main page
  */
-export const collectURLsNEP = async (): Promise<string[]> => {
-  const doc = await fetchHTMLParsed(nepBaseURL);
+export const collectURLsNEP = async (cacheDir: string): Promise<string[]> => {
+  const doc = await fetchHTMLParsed(nepBaseURL, cacheDir);
   return doc.getElementById('numpy-enhancement-proposals-neps')!
     .querySelectorAll('.toctree-l2')
     .flatMap(h => h.getElementsByTagName('a'))
@@ -44,9 +44,11 @@ export const isGithubComment = (comm: NEPComment): comm is GithubComment => Obje
  * Collects comments that can be found under a given URL
  * Tries one of multiple scraping strategies (email, github) depending on URL
  * @param url URL to look under
+ * @param cacheDir cache folder for fetch results, empty for no caching
  * @returns list of comments under the URL, in no particular order
  */
-const collectNEPComments = async (url: string): Promise<NEPComment[]> => {
+const collectNEPComments = async (url: string, cacheDir: string): Promise<NEPComment[]> => {
+  //TODO email
   /**
    * Fetch comments from GitHub issue
    * @param issueID ID of issue
@@ -54,8 +56,8 @@ const collectNEPComments = async (url: string): Promise<NEPComment[]> => {
    */
   const collectNEPGithubIssueComments = async (issueID: number): Promise<GithubComment[]> => {
     const issueAPI = githubIssuesAPI('numpy', 'numpy', issueID);
-    const issueComments = await fetchJSONParsed<GithubCommentJSON[]>(`${issueAPI}/comments`, ghAuthHeaders);
-    return await Promise.all(issueComments.map(parseGithubCommentJSON));
+    const issueComments = await fetchJSONParsed<GithubCommentJSON[]>(`${issueAPI}/comments`, cacheDir, ghAuthHeaders);
+    return await Promise.all(issueComments.map(comm => parseGithubCommentJSON(comm, cacheDir)));
   };
 
   /**
@@ -66,10 +68,10 @@ const collectNEPComments = async (url: string): Promise<NEPComment[]> => {
    */
   const collectNEPGithubPRComments = async (pullID: number): Promise<GithubComment[]> => {
     const pullAPI = githubPullsAPI('numpy', 'numpy', pullID);
-    const prBody = await fetchJSONParsed<GithubCommentJSON>(pullAPI, ghAuthHeaders);
-    const prComments = await fetchJSONParsed<GithubCommentJSON[]>(`${pullAPI}/comments`, ghAuthHeaders);
+    const prBody = await fetchJSONParsed<GithubCommentJSON>(pullAPI, cacheDir, ghAuthHeaders);
+    const prComments = await fetchJSONParsed<GithubCommentJSON[]>(`${pullAPI}/comments`, cacheDir, ghAuthHeaders);
     const prDiscussion = await Promise.all([prBody].concat(prComments)
-      .map(parseGithubCommentJSON));
+      .map(comm => parseGithubCommentJSON(comm, cacheDir)));
     const issueComments = await collectNEPGithubIssueComments(pullID);
     return prDiscussion.concat(issueComments);
   };
@@ -86,9 +88,10 @@ const collectNEPComments = async (url: string): Promise<NEPComment[]> => {
 /**
  * Extract NEP details from its numpy.org page
  * @param html full HTML page (numpy.org/neps/nep-xxxx-___.html)
+ * @param cacheDir cache folder for fetch results, empty for no caching
  * @returns NEP object
  */
-const parseNEP = async (html: HTMLElement): Promise<NEP> => {
+const parseNEP = async (html: HTMLElement, cacheDir: string): Promise<NEP> => {
   const article = html.querySelector('.bd-article')!.querySelector('section')!;
 
   const fullTitle = article.querySelector('h1')!.childNodes[0].text;
@@ -127,7 +130,7 @@ const parseNEP = async (html: HTMLElement): Promise<NEP> => {
     .map(([_, v]) => v)
     .flatMap(h => h.querySelectorAll('a'))
     .map(h => h.getAttribute('href')!);
-  const comments = (await Promise.all(resolutionURLs.map(collectNEPComments))).flat();
+  const comments = (await Promise.all(resolutionURLs.map(url => collectNEPComments(url, cacheDir)))).flat();
 
   return {
     id,
@@ -149,10 +152,11 @@ const parseNEP = async (html: HTMLElement): Promise<NEP> => {
 /**
  * Scrapes NEP from URL
  * @param url URL (numpy.org/neps/...)
+ * @param cacheDir cache folder for fetch results, empty for no caching
  * @param saveDir directory to save result; leave undefined for no saving
  */
-export const scrapeNEP = async (url: string, saveDir?: string): Promise<NEP> => {
-  const nep = await parseNEP(await fetchHTMLParsed(url));
+export const scrapeNEP = async (url: string, cacheDir: string, saveDir?: string): Promise<NEP> => {
+  const nep = await parseNEP(await fetchHTMLParsed(url, cacheDir), cacheDir);
   if(!nepTypes.includes(nep.type)) console.log('bad type', nep.id);
   if(!nepStates.includes(nep.status)) console.log('bad stat', nep.id);
   if(saveDir !== undefined) {
