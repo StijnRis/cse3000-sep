@@ -10,17 +10,18 @@ import type { SEP, GithubUser, GithubComment, GithubCommentJSON } from '../types
  * Caches content and gets it from cache if present
  * @param url URL to fetch (without https://)
  * @param contentType HTML, XML, JSON
- * @param cacheDirSuf suffix of directory for cache file (starts with 'cache'), which is named using URL; explicitly make it undefined for no caching
+ * @param cacheDir directory for cache file, which is named using URL; leave out or empty for no caching
+ * @param headers optional HTTP headers
  * @returns text of page, to be parsed as needed
  */
-const fetchParsed = async (url: string, contentType: 'html' | 'xml' | 'json', cacheDirSuf: string | undefined, headers?: HeadersInit): Promise<string> => {
-  const cacheFile = (suf: string) => `cache${suf}/${url}.${contentType}`;
+const fetchParsed = async (url: string, contentType: 'html' | 'xml' | 'json', cacheDir: string = '', headers?: HeadersInit): Promise<string> => {
+  const cacheFile = `${cacheDir}/${url}.${contentType}`;
   let resText;
-  if(cacheDirSuf !== undefined && existsSync(cacheFile(cacheDirSuf))) {
-    resText = readFileSync(cacheFile(cacheDirSuf), 'utf8');
+  if(cacheDir && existsSync(cacheFile)) {
+    resText = readFileSync(cacheFile, 'utf8');
   } else {
     resText = await fetch(`https://${url}`, {headers}).then(res => res.text());
-    if(cacheDirSuf !== undefined) outputFileSync(cacheFile(cacheDirSuf), resText, 'utf8');
+    if(cacheDir) outputFileSync(cacheFile, resText, 'utf8');
   }
   return resText;
 }
@@ -29,11 +30,12 @@ const fetchParsed = async (url: string, contentType: 'html' | 'xml' | 'json', ca
  * Fetch HTML page
  * Caches by default
  * @param url URL to fetch
- * @param cacheDirSuf suffix for cache folder, default empty string; explicitly make it undefined for no caching
+ * @param cacheDir cache folder, empty string for no caching
+ * @param headers optional HTTP headers
  * @returns parsed HTMLElement
  */
-export const fetchHTMLParsed = async (url: string, headers?: HeadersInit, cacheDirSuf: string | undefined = ''): Promise<HTMLElement> => {
-  return parse(await fetchParsed(url, 'html', cacheDirSuf, headers));
+export const fetchHTMLParsed = async (url: string, cacheDir: string, headers?: HeadersInit): Promise<HTMLElement> => {
+  return parse(await fetchParsed(url, 'html', cacheDir, headers));
 };
 
 /**
@@ -41,22 +43,24 @@ export const fetchHTMLParsed = async (url: string, headers?: HeadersInit, cacheD
  * Caches by default
  * @param url URL to fetch
  * @param parser XML parser
- * @param cacheDirSuf suffix for cache folder, default empty string; explicitly make it undefined for no caching
+ * @param cacheDir cache folder, empty string for no caching
+ * @param headers optional HTTP headers
  * @returns parsed XML object
  */
-export const fetchXMLParsed = async (url: string, parser: XMLParser, headers?: HeadersInit, cacheDirSuf: string | undefined = ''): Promise<any> => {
-  return parser.parse(await fetchParsed(url, 'xml', cacheDirSuf, headers));
+export const fetchXMLParsed = async (url: string, parser: XMLParser, cacheDir: string, headers?: HeadersInit): Promise<any> => {
+  return parser.parse(await fetchParsed(url, 'xml', cacheDir, headers));
 };
 
 /**
  * Fetch JSON response
  * Caches by default
  * @param url URL to fetch
- * @param cacheDirSuf suffix for cache folder, default empty string; explicitly make it undefined for no caching
+ * @param cacheDir cache folder, empty string for no caching
+ * @param headers optional HTTP headers
  * @returns parsed JSON object
  */
-export const fetchJSONParsed = async <T>(url: string, headers?: HeadersInit, cacheDirSuf: string | undefined = ''): Promise<T> => {
-  return JSON.parse(await fetchParsed(url, 'json', cacheDirSuf, headers));
+export const fetchJSONParsed = async <T>(url: string, cacheDir: string, headers?: HeadersInit): Promise<T> => {
+  return JSON.parse(await fetchParsed(url, 'json', cacheDir, headers));
 };
 
 const githubAPIBase = 'api.github.com/';
@@ -77,10 +81,11 @@ export const ghAuthHeaders: HeadersInit = {
 /**
  * Fetch user details from GitHub API
  * @param login username
+ * @param cacheDir cache folder, empty string for no caching
  * @returns user details
  */
-export const getGithubUser = async (login: string): Promise<GithubUser> => {
-  const { name } = await fetchJSONParsed<GithubUser>(githubUsersAPI(login), ghHeaders);
+export const getGithubUser = async (login: string, cacheDir: string): Promise<GithubUser> => {
+  const { name } = await fetchJSONParsed<GithubUser>(githubUsersAPI(login), cacheDir, ghHeaders);
   return { login, name };
 };
 
@@ -90,10 +95,10 @@ export const parseGithubCommentJSON = async ({
   created_at,
   body,
   in_reply_to_id
-}: GithubCommentJSON): Promise<GithubComment> => ({
+}: GithubCommentJSON, cacheDir: string): Promise<GithubComment> => ({
   id,
   reply_to: in_reply_to_id,
-  author: await getGithubUser(login),
+  author: await getGithubUser(login, cacheDir),
   created: new Date(created_at),
   body,
 });
