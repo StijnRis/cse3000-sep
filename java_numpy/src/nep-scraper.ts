@@ -1,0 +1,162 @@
+import { HTMLElement } from 'node-html-parser';
+import efs from 'fs-extra';
+const { outputJSONSync } = efs;
+import { fetchHTMLParsed, fetchJSONParsed, ghAuthHeaders, githubIssuesAPI, githubPullsAPI, parseGithubCommentJSON } from './common.ts';
+import type { SEP, EmailUser, Email, GithubComment, GithubCommentJSON } from '../types.d.ts';
+import nepDates from '../nep-missing-dates.json' with {type: 'json'};
+
+const nepBaseURL = 'numpy.org/neps/';
+
+/**
+ * Fetch URLs of all NEPs
+ * @returns all URLs findable from the main page
+ */
+export const collectURLsNEP = async (): Promise<string[]> => {
+  const doc = await fetchHTMLParsed(nepBaseURL);
+  return doc.getElementById('numpy-enhancement-proposals-neps')!
+    .querySelectorAll('.toctree-l2')
+    .flatMap(h => h.getElementsByTagName('a'))
+    .map(h => h.getAttribute('href'))
+    .filter(page => page !== 'nep-template.html') // meta-NEP, not needed
+    .map(page => `${nepBaseURL}${page}`);
+};
+
+// email optional for authors
+type NEPAuthor = Omit<EmailUser, 'email'> & Partial<Pick<EmailUser, 'email'>>;
+const nepTypes = ['Standards Track', 'Process', 'Informational', undefined] as const;
+type NEPType = typeof nepTypes[number];
+type NEPActualType = NEPType | 'Standard' | 'Standard Track' | 'Standards'; // python users are allergic to conventions
+const translateType = (actual: NEPActualType): NEPType => actual ? ({
+  'Standard': 'Standards Track',
+  'Standard Track': 'Standards Track',
+  'Standards': 'Standards Track',
+  'Standards Track': 'Standards Track',
+  'Process': 'Process',
+  'Informational': 'Informational',
+} as const)[actual] : actual;
+const nepStates = ['Draft', 'Active', 'Accepted', 'Deferred', 'Rejected', 'Withdrawn', 'Final', 'Superseded'] as const;
+type NEPStatus = typeof nepStates[number];
+type NEPComment = Email | GithubComment;
+export type NEP = SEP<NEPAuthor, NEPType, NEPStatus, NEPComment>;
+export const isGithubComment = (comm: NEPComment): comm is GithubComment => Object.hasOwn(comm.author, 'login');
+
+/**
+ * Collects comments that can be found under a given URL
+ * Tries one of multiple scraping strategies (email, github) depending on URL
+ * @param url URL to look under
+ * @returns list of comments under the URL, in no particular order
+ */
+const collectNEPComments = async (url: string): Promise<NEPComment[]> => {
+  /**
+   * Fetch comments from GitHub issue
+   * @param issueID ID of issue
+   * @returns list of comments under issue
+   */
+  const collectNEPGithubIssueComments = async (issueID: number): Promise<GithubComment[]> => {
+    const issueAPI = githubIssuesAPI('numpy', 'numpy', issueID);
+    const issueComments = await fetchJSONParsed<GithubCommentJSON[]>(`${issueAPI}/comments`, ghAuthHeaders);
+    return await Promise.all(issueComments.map(parseGithubCommentJSON));
+  };
+
+  /**
+   * Fetch comments from a GitHub PR resolution
+   * Also checks associated issue
+   * @param pullID ID of pull request
+   * @returns list of comments under PR (both issue and review)
+   */
+  const collectNEPGithubPRComments = async (pullID: number): Promise<GithubComment[]> => {
+    const pullAPI = githubPullsAPI('numpy', 'numpy', pullID);
+    const prBody = await fetchJSONParsed<GithubCommentJSON>(pullAPI, ghAuthHeaders);
+    const prComments = await fetchJSONParsed<GithubCommentJSON[]>(`${pullAPI}/comments`, ghAuthHeaders);
+    const prDiscussion = await Promise.all([prBody].concat(prComments)
+      .map(parseGithubCommentJSON));
+    const issueComments = await collectNEPGithubIssueComments(pullID);
+    return prDiscussion.concat(issueComments);
+  };
+
+  let match = url.match(/^https:\/\/github\.com\/numpy\/numpy\/issues\/([0-9]*)/);
+  if(match)
+    return await collectNEPGithubIssueComments(parseInt(match[1]));
+  match = url.match(/^https:\/\/github\.com\/numpy\/numpy\/pull\/([0-9]*)/);
+  if(match)
+    return await collectNEPGithubPRComments(parseInt(match[1]));
+  return [];
+};
+
+/**
+ * Extract NEP details from its numpy.org page
+ * @param html full HTML page (numpy.org/neps/nep-xxxx-___.html)
+ * @returns NEP object
+ */
+const parseNEP = async (html: HTMLElement): Promise<NEP> => {
+  const article = html.querySelector('.bd-article')!.querySelector('section')!;
+
+  const fullTitle = article.querySelector('h1')!.childNodes[0].text;
+  const id = parseInt(fullTitle.split(' — ')[0].replaceAll(/\D/g, ''));
+  const title = fullTitle.split(' — ')[1];
+
+  const metadata = article.querySelector('dl')!;
+  const mdKeys = metadata.querySelectorAll('dt').map(h => h.text);
+  const mdValues = metadata.querySelectorAll('dd');
+  const mdEntries: [string, HTMLElement][] = mdKeys.map((k, i) => [k, mdValues[i]]);
+  const mdField = (...possibleKeys: string[]) =>
+    mdEntries.find(([k]) => possibleKeys.includes(k))?.[1];
+  const mdTextField = (...possibleKeys: string[]) => {
+    const fieldText = mdField(...possibleKeys)?.text;
+    return fieldText === undefined
+      ? undefined
+      // to remove \n at the end
+      : fieldText.substring(0, fieldText.length - 1);
+  }
+
+  const dateStr = mdTextField('Created:', 'Date:');
+
+  const supersederIDStr = mdField('Replaced-By:')
+    ?.querySelector('a')!
+    .getAttribute('href')!
+    .match(/nep-([0-9]*)-.*\.html/)![1];
+
+  const contentFragments = id === 5
+    ? article.children.filter(c => ['p', 'ol', 'section'].includes(c.tagName.toLowerCase()))
+    : id === 9
+      ? article.children.filter(c => ['ol', 'blockquote'].includes(c.tagName.toLowerCase()))
+      : article.querySelectorAll('section');
+  const content = contentFragments.map(h => h.text).join('');
+
+  const resolutionURLs = mdEntries.filter(([k]) => k === 'Resolution:')
+    .map(([_, v]) => v)
+    .flatMap(h => h.querySelectorAll('a'))
+    .map(h => h.getAttribute('href')!);
+  const comments = (await Promise.all(resolutionURLs.map(collectNEPComments))).flat();
+
+  return {
+    id,
+    title,
+    authors: mdEntries.filter(([k]) => k === 'Author:')
+      .map(([_, v]) => v.text)
+      .flatMap(a => a.substring(0, a.length - 1).split(', '))
+      .map(a => ({name: a.replace(/ <.*>$/, ''), email: a.match(/ <(.*)>$/)?.[1]})),
+    type: translateType(mdTextField('Type:') as NEPActualType),
+    status: mdTextField('Status:')! as NEPStatus,
+    // some old NEPs don't have dates on the website, I manually took the earliest dates I could find from their github history
+    created: new Date(dateStr ? `${dateStr} UTC` : nepDates[`${id}` as keyof typeof nepDates]),
+    supersederID: supersederIDStr ? parseInt(supersederIDStr) : undefined,
+    content,
+    comments,
+  };
+};
+
+/**
+ * Scrapes NEP from URL
+ * @param url URL (numpy.org/neps/...)
+ * @param saveDir directory to save result; leave undefined for no saving
+ */
+export const scrapeNEP = async (url: string, saveDir?: string): Promise<NEP> => {
+  const nep = await parseNEP(await fetchHTMLParsed(url));
+  if(!nepTypes.includes(nep.type)) console.log('bad type', nep.id);
+  if(!nepStates.includes(nep.status)) console.log('bad stat', nep.id);
+  if(saveDir !== undefined) {
+    outputJSONSync(`data/${saveDir}/${nep.id}.json`, nep, { encoding: 'utf8', spaces: 2 });
+  }
+  return nep;
+};
