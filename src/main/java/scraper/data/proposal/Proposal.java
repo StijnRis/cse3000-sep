@@ -10,6 +10,9 @@ import org.hibernate.annotations.OnDeleteAction;
 import scraper.data.Project;
 import scraper.data.author.Person;
 
+import java.net.URL;
+import java.util.List;
+
 @Getter
 @Setter
 @Entity
@@ -38,4 +41,10 @@ public class Proposal {
     @Lob
     @Column(name = "proposal_type")
     private String proposalType;
+
+    @Transient
+    private List<URL> rfcPrs;
+
+    @Transient
+    private List<URL> trackingIssues;
 }

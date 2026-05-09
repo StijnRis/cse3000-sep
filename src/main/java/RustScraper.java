@@ -4,18 +4,17 @@ import scraper.parser.rust.RustDataReader;
 import scraper.data.Project;
 import util.HibernateUtil;
 import util.Log;
-import util.SQLiteDB;
 
 import java.io.File;
 import java.sql.SQLException;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 public class RustScraper {
 
     public static Map<String, String> arguments = new HashMap<>();
 
-    public static SQLiteDB db;
     public static HibernateUtil db2;
     public static RustDataReader dr;
 
@@ -36,21 +35,22 @@ public class RustScraper {
         String dbPath = rootFolder + "../dataset.sqlite";
         clearOldData(dbPath);
 
-        Project project = new Project(999, "Unspecified", "X", "NONE");
-
-        if(arguments.get("project").equals("rust")) {
-            project = new Project(5, "Rust", "RFC", "MIT or Apache-2.0");
-        }
-
         db2 = new HibernateUtil(dbPath);
         Session s = db2.getSession();
-        Transaction tx = s.beginTransaction();
+
+        if(arguments.get("project").equals("rust")) {
+            scrapeLocalFiles(s, rootFolder);
+        }
+
+        s.close();
+    }
+
+    private static void scrapeLocalFiles(Session s, String rootFolder) {
+        Project project = new Project(5, "Rust", "RFC", "MIT or Apache-2.0");
 
         //Project must already persist in database due to autogeneration of index and dependency on this.
-        s.persist(project);
-        tx.commit(); //Generate internal ids for proposals, otherwise PK violation below.
+        persistOne(s, project); //Generate internal ids for proposals, otherwise PK violation below.
 
-        //Read Data
         try {
             dr = new RustDataReader(s, project, rootFolder);
             dr.readProjectMarkdownFiles();
@@ -59,30 +59,23 @@ public class RustScraper {
             System.exit(-1);
         }
 
-        tx = s.beginTransaction();
+        persistAll(s, dr.getProposals());//Generate internal ids for proposals, otherwise PK violation below.
+        persistAll(s, dr.getProposalRevisions());
+        persistAll(s, dr.getRevisionAuthors());
+    }
 
-        //Dont use lambdas because db locks
-        for (int i = 0; i < dr.getProposals().size(); i++) {
-            s.persist(dr.getProposals().get(i));
+    private static <T> void persistAll(Session s, List<T> objects) {
+        Transaction tx = s.beginTransaction();
+        for (int i = 0; i < objects.size(); i++) {
+            s.persist(objects.get(i));
         }
-
-        tx.commit(); //Generate internal ids for proposals, otherwise PK violation below.
-        tx = s.beginTransaction();
-
-        for (int i = 0; i < dr.getProposalRevisions().size(); i++) {
-            s.persist(dr.getProposalRevisions().get(i));
-        }
-
         tx.commit();
-        tx = s.beginTransaction();
+    }
 
-        for (int i = 0; i < dr.getRevisionAuthors().size(); i++) {
-            s.persist(dr.getRevisionAuthors().get(i));
-        }
-
+    private static void persistOne(Session s, Object object) {
+        Transaction tx = s.beginTransaction();
+        s.persist(object);
         tx.commit();
-
-        s.close();
     }
 
     private static void clearOldData(String dbPath) {

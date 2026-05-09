@@ -4,7 +4,6 @@ import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.Root;
 import lombok.Getter;
-import lombok.Setter;
 import org.eclipse.jgit.lib.PersonIdent;
 import org.eclipse.jgit.revwalk.RevCommit;
 import org.hibernate.Session;
@@ -18,12 +17,8 @@ import scraper.data.proposal.revision.ProposalRevisionAuthor;
 import scraper.data.proposal.revision.ProposalRevisionAuthorId;
 import scraper.data.proposal.revision.ProposalRevisionId;
 import scraper.parser.GitReader;
-import util.Log;
 
 import java.io.IOException;
-import java.net.MalformedURLException;
-import java.net.URI;
-import java.net.URL;
 import java.sql.Date;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -71,7 +66,6 @@ public class RustDataParser {
             RevCommit commit = commits.get(i);
 
             String fileContent = gitReader.getFileContents(commit.getTree(), commit);
-            ProposalData data = extractDataFromLines(fileContent);
 
             Instant time = commit.getAuthorIdent().getWhenAsInstant();
             Date createdAt = Date.valueOf(LocalDate.ofInstant(time, ZoneId.systemDefault()));
@@ -85,7 +79,7 @@ public class RustDataParser {
             ProposalRevision pr = new ProposalRevision(
                     prId,
                     proposal,
-                    data.featureName,
+                    extractDataFromLines(fileContent),
                     createdAt,
                     fileContent,
                     ""
@@ -142,11 +136,11 @@ public class RustDataParser {
     }
 
     /**
-     * Extracts some basic information from the first few lines of the markdown file containing the proposal.
+     * Extract feature name from the first few lines of the markdown file containing the proposal.
      */
-    private ProposalData extractDataFromLines(String fileContent) throws Exception {
+    private String extractDataFromLines(String fileContent) throws Exception {
         Scanner scanner = new Scanner(fileContent);
-        ProposalData data = new ProposalData();
+        String featureName = null;
 
         while (scanner.hasNextLine()) {
             //Remove any unnecessary markdown formatting
@@ -154,18 +148,8 @@ public class RustDataParser {
             String lineLC = line.toLowerCase();
 
             if(lineLC.startsWith("feature name")) {
-                data.featureName = extractFeatureName(line);
+                featureName = extractFeatureName(line);
                 break;
-            }
-
-            if(lineLC.startsWith("rfc pr")) {
-                lineLC = lineLC.replace("rfc pr: ", "");
-                data.rfcPrs = parseMarkdownURLs(lineLC);
-            }
-
-            if(lineLC.startsWith("rust issue") || lineLC.startsWith("tracking issue")) {
-                lineLC = lineLC.replace("rust issue: ", "").replace("tracking issue", "");
-                data.trackingIssues = parseMarkdownURLs(lineLC);
             }
 
             //Early break if possible to save time
@@ -173,41 +157,12 @@ public class RustDataParser {
         }
 
         //Early RFCs did not explicitly contain all fields... or have n/a
-        if(data.featureName == null || data.featureName.equals("n/a")) {
-            data.featureName = extractFeatureNameBackup(fileName);
+        if(featureName == null || featureName.equals("n/a")) {
+            featureName = extractFeatureNameBackup(fileName);
         }
 
-        return data;
+        return featureName;
     }
-
-    /**
-     * Extracts the URL from a line with markdown url formatting.
-     */
-    private static List<URL> parseMarkdownURLs(String line) throws MalformedURLException {
-        String[] linkedPrs = line.split(", ");
-
-        List<URL> prs = new ArrayList<>();
-        for (int i = 0; i < linkedPrs.length; i++) {
-            String url = parseMarkdownURL(linkedPrs[i]);
-
-            if(url.startsWith("http")) {
-                prs.add(URI.create(url).toURL());
-            }
-        }
-
-        return prs;
-    }
-
-    /**
-     * Helper function
-     */
-    private static String parseMarkdownURL(String text) {
-        return text.replaceFirst("\\[.*\\]", "")
-                .replace("(", "")
-                .replace(")", "")
-                .split(" ")[0];
-    }
-
 
     /**
      * Deprecated, using commit date as date now.
@@ -239,12 +194,4 @@ public class RustDataParser {
         //Remove the number identifier prefix, remove trailing filetype and turn dashes into spaces
         return Arrays.stream(fileName.split("-")).skip(1).collect(Collectors.joining(" ")).replace(".md", "");
     }
-}
-
-@Getter
-@Setter
-class ProposalData {
-    String featureName;
-    List<URL> rfcPrs;
-    List<URL> trackingIssues;
 }
