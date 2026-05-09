@@ -2,7 +2,7 @@ import { groupByFinalID } from "./common.ts";
 import type { JEP } from "./jep-scraper.ts";
 import { isGithubComment } from "./nep-scraper.ts";
 import type { NEP } from "./nep-scraper.ts";
-import { Column, DataSource, Entity, JoinColumn, ManyToMany, ManyToOne, PrimaryColumn } from 'typeorm';
+import { Column, DataSource, Entity, JoinColumn, JoinTable, ManyToMany, ManyToOne, PrimaryColumn } from 'typeorm';
 import 'reflect-metadata';
 
 @Entity('Project')
@@ -72,7 +72,9 @@ class ProposalRevisionSQL {
   content: string;
   @Column({nullable: true})
   implemented_at_version?: string;
-  @ManyToMany(() => PersonSQL)
+  @ManyToMany(() => PersonSQL) @JoinTable({
+    name: 'ProposalRevisionAuthor', inverseJoinColumn: {name: 'author_id', referencedColumnName: 'person_id'}
+  })
   authors: PersonSQL[];
 };
 
@@ -132,12 +134,13 @@ class CommentSQL {
 class Database {
   project = new Map<number/*project_id*/, ProjectSQL>();
   person = new Map<number/*person_id*/, PersonSQL>();
-  person_username = new Map<[number/*person_id*/, string/*domain*/, string/*username*/], PersonUsernameSQL>();
-  proposal = new Map<[number/*project_id*/, string/*proposal_id*/], ProposalSQL>();
-  proposal_revision = new Map<[number/*project_id*/, string/*proposal_id*/, number/*revision_index*/], ProposalRevisionSQL>();
-  stage_history = new Map<[number/*project_id*/, string/*proposal_id*/, number/*stage_index*/], StageHistorySQL>();
+  // combining values into string as a hack, because arrays don't have proper equals functionality
+  person_username = new Map<string/*person_id domain username*/, PersonUsernameSQL>();
+  proposal = new Map<string/*project_id proposal_id*/, ProposalSQL>();
+  proposal_revision = new Map<string/*project_id proposal_id revision_index*/, ProposalRevisionSQL>();
+  stage_history = new Map<string/*project_id proposal_id stage_index*/, StageHistorySQL>();
   // proposal_revision_author: ProposalRevisionAuthorSQL[] = [];
-  comment = new Map<[number/*project_id*/, string/*proposal_id*/, number/*comment_id*/], CommentSQL>();
+  comment = new Map<number/*comment_id*/, CommentSQL>();
 }
 
 const realNameDomain = 'real_name';
@@ -147,36 +150,55 @@ const openjdkDomain = 'openjdk.org';
 
 abstract class Persister<SEP_T> {
   abstract project: ProjectSQL;
+
   db = new Database();
-  projID() {return this.project.project_id;}
   prepareDB() {
     this.db.project.set(this.projID(), this.project);
-  };
-  usernameToID = new Map<[string/*domain*/, string/*username*/], number>();
+  }
+
+  projID() {return this.project.project_id;}
+  /**
+   * According to agreed strategy of unique ID generation
+   * @param id in-project (unique) ID
+   * @returns universally unique ID
+   */
+  generateNumID(id: number) {return this.projID() * 1000000 + id;}
+
+  usernameToID = new Map<string/*domain username*/, number>();
   addPerson(username: string, name: string, domain: string) {
-    const newID = this.usernameToID.size;
-    this.usernameToID.set([domain, username], newID);
+    const key = `${domain} ${username}`;
+    if(this.usernameToID.has(key)) return;
+    const newID = this.generateNumID(this.usernameToID.size);
+    this.usernameToID.set(key, newID);
     const person: PersonSQL = {
       person_id: newID,
       full_name: name,
     };
     this.db.person.set(newID, person);
-    this.db.person_username.set([newID, domain, username], {
+    this.db.person_username.set(`${newID} ${domain} ${username}`, {
       person_id: person.person_id,
       person,
       domain,
       username,
     });
   }
+
+  /**
+   * Implementations should come up with their own translation schemes
+   * @param status raw status
+   */
   abstract normalizeStatus(status: string | undefined): StageHistorySQL['normalised_status'];
+
   abstract persistPeople(seps: SEP_T[]): void;
   abstract persistSEPs(seps: SEP_T[]): void;
+
   /**
    * Persists a collection of SEPs into an intermediate memory-based database
    * @param seps collection of SEPs
    * @returns in-memory database, must then be dumped into real DB
    */
   persist(seps: SEP_T[]): Database {
+    this.prepareDB();
     // first populate with all the people that can be found
     this.persistPeople(seps);
     // then fill SEPs
@@ -192,6 +214,7 @@ export class JEPPersister extends Persister<JEP> {
     enhancement_proposal_name: 'JEP',
     copyright: 'GPLv2',
   };
+
   normalizeStatus(status: JEP['status']): StageHistorySQL['normalised_status'] {
     return status ? (({
       'Draft': 'draft',
@@ -210,6 +233,7 @@ export class JEPPersister extends Persister<JEP> {
       'Targeted': 'review',
     } as const)[status] || 'unknown') : 'unknown';
   }
+
   persistPeople(jeps: JEP[]) {
     for(const jep of jeps) {
       if(jep.owner) this.addPerson(jep.owner.username, jep.owner.name, openjdkDomain);
@@ -229,11 +253,12 @@ export class JEPPersister extends Persister<JEP> {
         // proposer_id: final.owner ? this.usernameToID.get([openjdkDomain, final.owner.username]) : undefined,
         proposal_type: final.type,
       };
-      this.db.proposal.set([this.projID(), id], proposal);
+      this.db.proposal.set(`${this.projID()} ${id}`, proposal);
       group.forEach((jep, idx) => {
+        const revisionKey = `${this.projID()} ${id} ${idx}`;
         const allAuthorIDs = new Set(jep.authors
-            .map(name => this.usernameToID.get([realNameDomain, name])!));
-        this.db.proposal_revision.set([this.projID(), id, idx], {
+            .map(name => this.usernameToID.get(`${realNameDomain} ${name}`)!));
+        this.db.proposal_revision.set(revisionKey, {
           project_id: proposal.project_id,
           proposal_id: proposal.proposal_id,
           proposal,
@@ -252,7 +277,7 @@ export class JEPPersister extends Persister<JEP> {
         //     author_id: this.usernameToID.get([realNameDomain, author])!,
         //   });
         // }
-        this.db.stage_history.set([this.projID(), id, idx], {
+        this.db.stage_history.set(revisionKey, {
           project_id: proposal.project_id,
           proposal_id: proposal.proposal_id,
           proposal,
@@ -262,9 +287,10 @@ export class JEPPersister extends Persister<JEP> {
           created_at: jep.created,
         });
         for(const comment of jep.comments) {
-          const author = this.db.person.get(this.usernameToID.get([openjdkDomain, comment.author.username])!)!;
-          this.db.comment.set([this.projID(), id, comment.id], {
-            comment_id: comment.id,
+          const newID = this.generateNumID(this.db.comment.size);
+          const author = this.db.person.get(this.usernameToID.get(`${openjdkDomain} ${comment.author.username}`)!)!;
+          this.db.comment.set(newID, {
+            comment_id: newID,
             author_id: author.person_id,
             author,
             project_id: proposal.project_id,
@@ -286,6 +312,7 @@ export class NEPPersister extends Persister<NEP> {
     enhancement_proposal_name: 'NEP',
     copyright: 'Public Domain',
   };
+
   normalizeStatus(status: NEP['status']): StageHistorySQL["normalised_status"] {
     return ({
       'Draft': 'review',
@@ -298,6 +325,7 @@ export class NEPPersister extends Persister<NEP> {
       'Superseded': 'superseded',
     } as const)[status] || 'unknown';
   }
+
   persistPeople(neps: NEP[]) {
     for(const nep of neps) {
       for(const author of nep.authors) {
@@ -321,13 +349,14 @@ export class NEPPersister extends Persister<NEP> {
         proposal_id: id,
         proposal_type: final.type,
       };
-      this.db.proposal.set([this.projID(), id], proposal);
+      this.db.proposal.set(`${this.projID()} ${id}`, proposal);
       group.forEach((nep, idx) => {
+        const revisionKey = `${this.projID()} ${id} ${idx}`;
         const allAuthorIDs = nep.authors
           .map(author => this.usernameToID.get(author.email === undefined
-            ? [realNameDomain, author.name]
-            : [emailDomain, author.email])!);
-        this.db.proposal_revision.set([this.projID(), id, idx], {
+            ? `${realNameDomain} ${author.name}`
+            : `${emailDomain} ${author.email}`)!);
+        this.db.proposal_revision.set(revisionKey, {
           project_id: proposal.project_id,
           proposal_id: proposal.proposal_id,
           proposal,
@@ -345,7 +374,7 @@ export class NEPPersister extends Persister<NEP> {
         //     author_id: ,
         //   });
         // }
-        this.db.stage_history.set([this.projID(), id, idx], {
+        this.db.stage_history.set(revisionKey, {
           project_id: proposal.project_id,
           proposal_id: proposal.proposal_id,
           proposal,
@@ -354,21 +383,33 @@ export class NEPPersister extends Persister<NEP> {
           raw_status: nep.status,
           created_at: nep.created,
         });
+        // first need to generate IDs so that they can be referenced by replies
+        const commentToID = new Map<number, number>();
         nep.comments.forEach((comment, i) => {
+          const newID = this.generateNumID(i);
+          if(isGithubComment(comment)) {
+            commentToID.set(comment.id, newID);
+          }
+        });
+        nep.comments.forEach((comment, i) => {
+          console.log(this.usernameToID.entries().toArray());
           const author = this.db.person.get(
             this.usernameToID.get(isGithubComment(comment)
-              ? [githubDomain, comment.author.login]
-              : [emailDomain, comment.author.email])!
+              ? `${githubDomain} ${comment.author.login}`
+              : `${emailDomain} ${comment.author.email}`)!
           )!;
-          this.db.comment.set([this.projID(), id, i], {
-            comment_id: isGithubComment(comment) ? comment.id : i,
+          const newID = this.generateNumID(i);
+          this.db.comment.set(newID, {
+            comment_id: newID,
             author_id: author.person_id,
             author,
             project_id: proposal.project_id,
             proposal_id: proposal.proposal_id,
             proposal,
             created_at: comment.created,
-            comment_on_comment_id: isGithubComment(comment) ? comment.reply_to : undefined,
+            comment_on_comment_id: isGithubComment(comment) && comment.reply_to !== undefined
+              ? commentToID.get(comment.reply_to)
+              : undefined,
             content: comment.body,
           });
         });
@@ -388,7 +429,7 @@ export const dataSource = async (database: string): Promise<DataSource> => {
     database,
     entities: [ProjectSQL, PersonSQL, PersonUsernameSQL, ProposalSQL, ProposalRevisionSQL, StageHistorySQL, CommentSQL],
     synchronize: true,
-    logging: true,
+    // logging: true,
   });
   await db.initialize();
   return db;
