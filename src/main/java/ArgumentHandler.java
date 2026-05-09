@@ -77,9 +77,16 @@ public class ArgumentHandler {
         if(!rootDir.exists() || !rootDir.isDirectory()) {
             throw new IllegalArgumentException("Provided path is not an existing directory.");
         }
+
+        if(!value.endsWith("/")) {
+            throw new IllegalArgumentException("Path must end with / for internal reasons.");
+        }
     }
 
     private static void validateRemote(String value) {
+        if(!value.endsWith("/")) {
+            throw new IllegalArgumentException("Path must end with / for internal reasons.");
+        }
         //TODO
     }
 }

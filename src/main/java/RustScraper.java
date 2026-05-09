@@ -1,12 +1,13 @@
+import org.eclipse.jgit.api.Git;
 import org.hibernate.Session;
 import org.hibernate.Transaction;
-import scraper.parser.rust.RustDataReader;
 import scraper.data.Project;
+import scraper.parser.rust.RustDataReader;
+import scraper.parser.rust.RustRepoReader;
 import util.HibernateUtil;
 import util.Log;
 
 import java.io.File;
-import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -17,9 +18,9 @@ public class RustScraper {
 
     public static HibernateUtil db2;
     public static RustDataReader dr;
+    public static RustRepoReader rr;
 
-
-    public static void main(String[] args) throws SQLException {
+    public static void main(String[] args) throws Exception {
         Log.log("Started Scraper");
 
         arguments = ArgumentHandler.parseArgs(args);
@@ -30,19 +31,54 @@ public class RustScraper {
             System.exit(-1);
         }
 
-        //Local only for now
-        String rootFolder = arguments.get("local");
-        String dbPath = rootFolder + "../dataset.sqlite";
+        //File path setup
+        String rootFolder = "";
+        if(arguments.containsKey("local")) {
+            rootFolder = arguments.get("local");
+        } else if(arguments.containsKey("remote")) {
+            rootFolder = arguments.get("remote");
+        }
+
+        String gitRootFolder = rootFolder + "rfcs/";
+        String cacheFolder = rootFolder + "cache/";
+        String dbPath = rootFolder + "dataset.sqlite";
+
         clearOldData(dbPath);
+        new File(cacheFolder).mkdir(); //Ensure cache folder exists even for first time runs.
 
         db2 = new HibernateUtil(dbPath);
         Session s = db2.getSession();
 
         if(arguments.get("project").equals("rust")) {
-            scrapeLocalFiles(s, rootFolder);
+            if(arguments.containsKey("remote")) {
+                downloadRustRepository(gitRootFolder);
+            }
+
+            scrapeLocalFiles(s, gitRootFolder);
+
+            //Scrape online PRs and Discussions only if remote, otherwise use cached pages
+            //This requires the above to link to proper proposals (PR urls in .md files)
+            if(arguments.containsKey("remote")) {
+                try {
+                    rr = new RustRepoReader(cacheFolder, false, dr.getProposals());
+
+                    rr.scrapeGitHubData();
+
+                } catch (Exception e) {
+                    Log.error("Failed reading data from GitHub: " + e);
+                    System.exit(-1);
+                }
+            }
         }
 
         s.close();
+    }
+
+    private static void downloadRustRepository(String rootFolder) throws Exception {
+        Git.cloneRepository()
+                .setURI("https://github.com/rust-lang/rfcs.git")
+                .setDirectory(new File(rootFolder))
+                .call();
     }
 
     private static void scrapeLocalFiles(Session s, String rootFolder) {
@@ -53,15 +89,16 @@ public class RustScraper {
 
         try {
             dr = new RustDataReader(s, project, rootFolder);
+
             dr.readProjectMarkdownFiles();
+
+            persistAll(s, dr.getProposals());//Generate internal ids for proposals, otherwise PK violation below.
+            persistAll(s, dr.getProposalRevisions());
+            persistAll(s, dr.getRevisionAuthors());
         } catch (Exception e) {
             Log.error("Failed reading data from rust project: " + e);
             System.exit(-1);
         }
-
-        persistAll(s, dr.getProposals());//Generate internal ids for proposals, otherwise PK violation below.
-        persistAll(s, dr.getProposalRevisions());
-        persistAll(s, dr.getRevisionAuthors());
     }
 
     private static <T> void persistAll(Session s, List<T> objects) {

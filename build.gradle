@@ -23,7 +23,7 @@ dependencies {
     implementation("org.hibernate.orm:hibernate-community-dialects:7.3.2.Final")
     implementation "jakarta.transaction:jakarta.transaction-api"
     implementation("org.eclipse.jgit:org.eclipse.jgit:7.6.0.202603022253-r")
-
+    implementation 'org.jsoup:jsoup:1.22.2'
 
     testImplementation('org.junit.jupiter:junit-jupiter:5.14.3')
     testRuntimeOnly('org.junit.platform:junit-platform-launcher')

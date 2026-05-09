@@ -43,8 +43,8 @@ public class Proposal {
     private String proposalType;
 
     @Transient
-    private List<URL> rfcPrs;
+    private List<String> rfcPrs;
 
     @Transient
-    private List<URL> trackingIssues;
+    private List<String> trackingIssues;
 }

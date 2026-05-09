@@ -11,8 +11,6 @@ import util.Log;
 
 import java.io.*;
 import java.net.MalformedURLException;
-import java.net.URI;
-import java.net.URL;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
@@ -127,8 +125,8 @@ public class RustDataReader {
         List<String> lines = proposalReader.readAllLines();
 
         String featureName = null;
-        List<URL> rfcPrs = new ArrayList<>();
-        List<URL> trackingIssues = new ArrayList<>();
+        List<String> rfcPrs = new ArrayList<>();
+        List<String> trackingIssues = new ArrayList<>();
 
         //Iterate through all lines
         for (int i = 0; i < lines.size() ; i++) {
@@ -174,15 +172,15 @@ public class RustDataReader {
     /**
      * Extracts the URL from a line with markdown url formatting.
      */
-    private static List<URL> parseMarkdownURLs(String line) throws MalformedURLException {
+    private static List<String> parseMarkdownURLs(String line) throws MalformedURLException {
         String[] linkedPrs = line.split(", ");
 
-        List<URL> prs = new ArrayList<>();
+        List<String> prs = new ArrayList<>();
         for (int i = 0; i < linkedPrs.length; i++) {
             String url = parseMarkdownURL(linkedPrs[i]);
 
             if(url.startsWith("http")) {
-                prs.add(URI.create(url).toURL());
+                prs.add(url);
             }
         }
 
