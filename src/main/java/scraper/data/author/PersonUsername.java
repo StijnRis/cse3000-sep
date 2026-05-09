@@ -19,10 +19,4 @@ public class PersonUsername {
     @OnDelete(action = OnDeleteAction.RESTRICT)
     @JoinColumn(name = "person_id", nullable = false)
     private Person person;
-
-    @Lob
-    @Column(name = "real_name")
-    private String realName;
-
-
 }

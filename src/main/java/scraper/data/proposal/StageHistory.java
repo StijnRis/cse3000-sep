@@ -29,8 +29,13 @@ public class StageHistory {
     private Proposal proposal;
 
     @Lob
-    @Column(name = "status", nullable = false)
-    private String status;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "normalised_status", nullable = false)
+    private NormalizedStatus normalizedStatus;
+
+    @Lob
+    @Column(name = "raw_status")
+    private String rawStatus;
 
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
