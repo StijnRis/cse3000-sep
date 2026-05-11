@@ -1,16 +1,12 @@
 package scraper.parser.rust;
 
-import jakarta.persistence.criteria.CriteriaBuilder;
-import jakarta.persistence.criteria.CriteriaQuery;
-import jakarta.persistence.criteria.Root;
 import lombok.Getter;
 import org.eclipse.jgit.lib.PersonIdent;
 import org.eclipse.jgit.revwalk.RevCommit;
 import org.hibernate.Session;
-import org.hibernate.Transaction;
-import org.hibernate.query.Query;
 import scraper.data.Project;
 import scraper.data.author.Person;
+import scraper.data.author.PersonUsername;
 import scraper.data.proposal.Proposal;
 import scraper.data.proposal.revision.ProposalRevision;
 import scraper.data.proposal.revision.ProposalRevisionAuthor;
@@ -23,10 +19,7 @@ import java.sql.Date;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Scanner;
+import java.util.*;
 import java.util.stream.Collectors;
 
 public class RustDataParser {
@@ -97,7 +90,7 @@ public class RustDataParser {
      * Extracts author data from a commit
      */
     private void extractAuthor(ProposalRevisionId prId, ProposalRevision pr, PersonIdent ident) throws Exception {
-        Person person = getOrCreateAuthor(ident.getName());
+        Person person = getOrCreateAuthor(ident);
 
         ProposalRevisionAuthorId praId = new ProposalRevisionAuthorId(
                 prId.getProjectId(),
@@ -113,25 +106,18 @@ public class RustDataParser {
      * Helper function to keep code easily readable.
      * Checks database if the person already exists, and creates them if not.
      */
-    private Person getOrCreateAuthor(String name) {
-        CriteriaBuilder cb = session.getCriteriaBuilder();
-        CriteriaQuery<Person> cq = cb.createQuery(Person.class);
-        Root<Person> root = cq.from(Person.class);
-        cq.select(root).where(cb.equal(root.get("fullName"), name));
+    private Person getOrCreateAuthor(PersonIdent ident) {
+        Optional<Person> author = Person.findAuthorByName(session, ident.getName());
+        if(author.isEmpty()) author = Person.findAuthorByEmail(session, ident.getEmailAddress());
 
-        Query<Person> query = session.createQuery(cq);
-        List<Person> results = query.getResultList();
-
-        if(results.isEmpty()) { //Create new
-            Person person = new Person(authorIndex, name);
+        if(author.isEmpty()) { //Create new
+            Person person = Person.create(session, authorIndex, ident.getName());
             authorIndex++;
 
-            Transaction tx = session.beginTransaction();
-            session.persist(person);
-            tx.commit();
+            PersonUsername.create(session, person, "email", ident.getEmailAddress());
             return person;
         } else {
-            return results.getFirst();
+            return author.get();
         }
     }
 

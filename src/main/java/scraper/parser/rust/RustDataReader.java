@@ -26,10 +26,12 @@ public class RustDataReader {
     @Getter
     private List<ProposalRevisionAuthor> revisionAuthors = new ArrayList<>();
 
+    @Getter
+    private int authorIndex = 5000000; //Assigned project id (5) * 1 million
+
     private Session session;
     private Project project;
     private String rootDirPath;
-    private int authorIndex = 5000000; //Assigned project id (5) * 1 million
 
     public RustDataReader(Session session, Project project, String rootDirPath) {
         this.session = session;
@@ -69,7 +71,7 @@ public class RustDataReader {
                         parseRustRFC(file);
                         success.getAndIncrement();
                     } catch (Exception e) {
-                        Log.warn("Could not parse RFC File: " + file.getName());
+                        Log.warn("RFC Parsing: Could not parse RFC File: " + file.getName());
                         e.printStackTrace();
                         failure.getAndIncrement();
                     }

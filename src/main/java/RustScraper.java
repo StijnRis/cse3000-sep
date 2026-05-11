@@ -59,20 +59,26 @@ public class RustScraper {
             //Scrape online PRs and Discussions only if remote, otherwise use cached pages
             //This requires the above to link to proper proposals (PR urls in .md files)
             if(arguments.containsKey("remote")) {
-                try {
-                    rr = new RustRepoReader(cacheFolder, false, dr.getProposals());
-
-                    rr.scrapeGitHubData();
-
-                } catch (Exception e) {
-                    Log.error("Failed reading data from GitHub: " + e);
-                    System.exit(-1);
-                }
+                scrapeGitHubPRs(s, cacheFolder);
             }
         }
 
         s.close();
     }
+
+    private static void scrapeGitHubPRs(Session s, String cacheFolder) {
+        try {
+            rr = new RustRepoReader(s, cacheFolder, false, dr.getProposals(), dr.getAuthorIndex());
+
+            rr.scrapeGitHubData();
+
+            persistAll(s, rr.getComments());
+        } catch (Exception e) {
+            Log.error("Failed reading data from GitHub: " + e);
+            System.exit(-1);
+        }
+    }
+
 
     private static void downloadRustRepository(String rootFolder) throws Exception {
         Git.cloneRepository()
