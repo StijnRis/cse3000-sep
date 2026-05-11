@@ -16,7 +16,7 @@ import type { SEP, GithubUser, GithubComment, GithubCommentJSON } from '../types
  */
 const fetchParsed = async (url: string, contentType: 'html' | 'xml' | 'json', cacheDir: string = '', headers?: HeadersInit): Promise<string> => {
   const cacheFile = `${cacheDir}/${url}.${contentType}`;
-  let resText;
+  let resText: string;
   if(cacheDir && existsSync(cacheFile)) {
     resText = readFileSync(cacheFile, 'utf8');
   } else {
@@ -63,11 +63,30 @@ export const fetchJSONParsed = async <T>(url: string, cacheDir: string, headers?
   return JSON.parse(await fetchParsed(url, 'json', cacheDir, headers));
 };
 
+export const fetchFile = async (url: string, contentType: string, cacheDir: string, headers?: HeadersInit): Promise<Blob> => {
+  const cacheFile = `${cacheDir}/${url}.${contentType}`;
+  let resBlob: Blob;
+  if(cacheDir && existsSync(cacheFile)) {
+    const buf = readFileSync(cacheFile, null);
+    resBlob = new Blob([buf]);
+  } else {
+    resBlob = await fetch(`https://${url}`, {headers}).then(res => res.blob());
+    const buf = await resBlob.arrayBuffer();
+    if(cacheDir) {
+      outputFileSync(cacheFile, Buffer.from(buf), null);
+    }
+  }
+  return resBlob;
+};
+
 const githubAPIBase = 'api.github.com/';
 const githubUsersAPI = (login: string) => `${githubAPIBase}users/${login}`;
 const githubReposAPI = (owner: string, repo: string) => `${githubAPIBase}repos/${owner}/${repo}`;
 export const githubPullsAPI = (owner: string, repo: string, pullID: number) => `${githubReposAPI(owner, repo)}/pulls/${pullID}`;
 export const githubIssuesAPI = (owner: string, repo: string, issueID: number) => `${githubReposAPI(owner, repo)}/issues/${issueID}`;
+
+export const pythonMailListURL = (list: string, threadID: string, fileName: string) =>
+  `mail.python.org/archives/list/${list}@python.org/export/${fileName}.mbox.gz?thread=${threadID}`;
 
 const ghHeaders: HeadersInit = {
   'Accept': 'application/vnd.github+json',
@@ -97,7 +116,7 @@ export const parseGithubCommentJSON = async ({
   in_reply_to_id
 }: GithubCommentJSON, cacheDir: string): Promise<GithubComment> => ({
   id,
-  reply_to: in_reply_to_id,
+  replyTo: in_reply_to_id,
   author: await getGithubUser(login, cacheDir),
   created: new Date(created_at),
   body,

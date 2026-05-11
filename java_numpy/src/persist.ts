@@ -266,7 +266,7 @@ export class JEPPersister extends Persister<JEP> {
           title: jep.title,
           created_at: jep.created,
           content: jep.content,
-          implemented_at_version: jep.release?.toString(),
+          implemented_at_version: jep.release,
           authors: allAuthorIDs.keys().toArray().map(id => this.db.person.get(id)!),
         });
         // for(const author of jep.authors) {
@@ -339,6 +339,16 @@ export class NEPPersister extends Persister<NEP> {
     }
   }
   persistSEPs(neps: NEP[]) {
+    // first need to generate IDs so that they can be referenced by replies
+    const commentToID = new Map<number | string, number>();
+    for(const nep of neps) {
+      for(const comm of nep.comments) {
+        if(!commentToID.has(comm.id)) {
+          const newID = this.generateNumID(commentToID.size);
+          commentToID.set(comm.id, newID);
+        }
+      }
+    }
     const byFinal = groupByFinalID(neps);
     for(const [fid, group] of byFinal) {
       const id = `${fid}`;
@@ -383,22 +393,13 @@ export class NEPPersister extends Persister<NEP> {
           raw_status: nep.status,
           created_at: nep.created,
         });
-        // first need to generate IDs so that they can be referenced by replies
-        const commentToID = new Map<number, number>();
-        nep.comments.forEach((comment, i) => {
-          const newID = this.generateNumID(i);
-          if(isGithubComment(comment)) {
-            commentToID.set(comment.id, newID);
-          }
-        });
-        nep.comments.forEach((comment, i) => {
-          console.log(this.usernameToID.entries().toArray());
+        for(const comment of nep.comments) {
           const author = this.db.person.get(
             this.usernameToID.get(isGithubComment(comment)
               ? `${githubDomain} ${comment.author.login}`
               : `${emailDomain} ${comment.author.email}`)!
           )!;
-          const newID = this.generateNumID(i);
+          const newID = commentToID.get(comment.id)!;
           this.db.comment.set(newID, {
             comment_id: newID,
             author_id: author.person_id,
@@ -407,12 +408,12 @@ export class NEPPersister extends Persister<NEP> {
             proposal_id: proposal.proposal_id,
             proposal,
             created_at: comment.created,
-            comment_on_comment_id: isGithubComment(comment) && comment.reply_to !== undefined
-              ? commentToID.get(comment.reply_to)
+            comment_on_comment_id: comment.replyTo !== undefined
+              ? commentToID.get(comment.replyTo)
               : undefined,
             content: comment.body,
           });
-        });
+        }
       });
     }
   }

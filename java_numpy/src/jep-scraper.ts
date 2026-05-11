@@ -41,7 +41,7 @@ type JEPComment = {
 export type JEP = SEP<string, JEPType, JEPStatus, JEPComment> & {
   issueID: number,
   owner?: OpenJDKUser,
-  release?: number,
+  release?: string,
   relatedIDs: number[],
 };
 type JEPXML = {
@@ -143,7 +143,7 @@ const parseJEP = async (id: number, supersederID: number | undefined, html: HTML
     created: new Date(jepXML.created),
     type,
     status: metadata['Status'].text as JEPStatus,
-    release: metadata['Release'] ? parseInt(metadata['Release'].text) : undefined,
+    release: metadata['Release']?.text,
     supersederID,
     relatedIDs: metadata['Relates to']?.querySelectorAll('a').map(a => parseInt(a.getAttribute('href')!)) || [],
     content: parse(jepXML.description).text,
@@ -188,7 +188,7 @@ export const scrapeJEP = async (id: number, supersederID: number | undefined, ca
   console.log(`Fetching comments of JEP ${id}`);
   const jep = await parseJEP(id, supersederID, page, cacheDir);
   if(saveDir !== undefined) {
-    outputJSONSync(`data/${saveDir}/${jep.id}.json`, jep, { encoding: 'utf8', spaces: 2 });
+    outputJSONSync(`${saveDir}/${jep.id}.json`, jep, { encoding: 'utf8', spaces: 2 });
   }
   return jep;
 };
