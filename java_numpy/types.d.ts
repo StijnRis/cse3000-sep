@@ -19,16 +19,15 @@ export type GithubUser = {
   name: string,
 };
 
-export type Comment<A> = {
+export type Comment<ID, A> = {
+  id: ID,
+  replyTo?: ID,
   author: A,
   created: Date,
-  body: string
+  body: string,
 };
-export type Email = Comment<EmailUser>;
-export type GithubComment = Comment<GithubUser> & {
-  id: number,
-  reply_to?: number,
-};
+export type Email = Comment<string, EmailUser>;
+export type GithubComment = Comment<number, GithubUser>;
 
 export type GithubCommentJSON = {
   id: number,

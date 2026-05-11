@@ -1,7 +1,9 @@
 import { HTMLElement } from 'node-html-parser';
 import efs from 'fs-extra';
+import { Readable } from 'node:stream';
 const { outputJSONSync } = efs;
-import { fetchHTMLParsed, fetchJSONParsed, ghAuthHeaders, githubIssuesAPI, githubPullsAPI, parseGithubCommentJSON } from './common.ts';
+import { mboxParser } from 'mbox-parser';
+import { fetchFile, fetchHTMLParsed, fetchJSONParsed, ghAuthHeaders, githubIssuesAPI, githubPullsAPI, parseGithubCommentJSON, pythonMailListURL } from './common.ts';
 import type { SEP, EmailUser, Email, GithubComment, GithubCommentJSON } from '../types.d.ts';
 import nepDates from '../nep-missing-dates.json' with {type: 'json'};
 
@@ -48,13 +50,35 @@ export const isGithubComment = (comm: NEPComment): comm is GithubComment => Obje
  * @returns list of comments under the URL, in no particular order
  */
 const collectNEPComments = async (url: string, cacheDir: string): Promise<NEPComment[]> => {
-  //TODO email
+  /**
+   * Fetch emails from given thread using archive download URL
+   * @todo support pipermail (older version, no explicit download URL)
+   * @param threadID HyperKitty thread ID
+   * @returns list of email objects in thread
+   */
+  const collectArchiveEmails = async (threadID: string): Promise<Email[]> => {
+    const mailAPI = pythonMailListURL('numpy-discussion', threadID, threadID);
+    const gzBlob = await fetchFile(mailAPI, 'gz', cacheDir);
+    const unpacked = gzBlob.stream().pipeThrough(new DecompressionStream('gzip'));
+    const mails = await mboxParser(Readable.from(unpacked));
+    return mails.map(m => ({
+      id: m.messageId!,
+      replyTo: m.inReplyTo,
+      author: {
+        email: m.from!.value[0].address!,
+        name: m.from!.value[0].name,
+      },
+      created: m.date!,
+      body: m.text!,
+    }));
+  };
+
   /**
    * Fetch comments from GitHub issue
    * @param issueID ID of issue
    * @returns list of comments under issue
    */
-  const collectNEPGithubIssueComments = async (issueID: number): Promise<GithubComment[]> => {
+  const collectGithubIssueComments = async (issueID: number): Promise<GithubComment[]> => {
     const issueAPI = githubIssuesAPI('numpy', 'numpy', issueID);
     const issueComments = await fetchJSONParsed<GithubCommentJSON[]>(`${issueAPI}/comments`, cacheDir, ghAuthHeaders);
     return await Promise.all(issueComments.map(comm => parseGithubCommentJSON(comm, cacheDir)));
@@ -66,22 +90,25 @@ const collectNEPComments = async (url: string, cacheDir: string): Promise<NEPCom
    * @param pullID ID of pull request
    * @returns list of comments under PR (both issue and review)
    */
-  const collectNEPGithubPRComments = async (pullID: number): Promise<GithubComment[]> => {
+  const collectGithubPRComments = async (pullID: number): Promise<GithubComment[]> => {
     const pullAPI = githubPullsAPI('numpy', 'numpy', pullID);
     const prBody = await fetchJSONParsed<GithubCommentJSON>(pullAPI, cacheDir, ghAuthHeaders);
     const prComments = await fetchJSONParsed<GithubCommentJSON[]>(`${pullAPI}/comments`, cacheDir, ghAuthHeaders);
     const prDiscussion = await Promise.all([prBody].concat(prComments)
       .map(comm => parseGithubCommentJSON(comm, cacheDir)));
-    const issueComments = await collectNEPGithubIssueComments(pullID);
+    const issueComments = await collectGithubIssueComments(pullID);
     return prDiscussion.concat(issueComments);
   };
 
-  let match = url.match(/^https:\/\/github\.com\/numpy\/numpy\/issues\/([0-9]*)/);
+  let match = url.match(/^https:\/\/mail\.python\.org\/archives\/list\/numpy-discussion@python\.org\/thread\/([A-Z0-9]*)/);
   if(match)
-    return await collectNEPGithubIssueComments(parseInt(match[1]));
+    return await collectArchiveEmails(match[1]);
+  match = url.match(/^https:\/\/github\.com\/numpy\/numpy\/issues\/([0-9]*)/);
+  if(match)
+    return await collectGithubIssueComments(parseInt(match[1]));
   match = url.match(/^https:\/\/github\.com\/numpy\/numpy\/pull\/([0-9]*)/);
   if(match)
-    return await collectNEPGithubPRComments(parseInt(match[1]));
+    return await collectGithubPRComments(parseInt(match[1]));
   return [];
 };
 
@@ -157,10 +184,8 @@ const parseNEP = async (html: HTMLElement, cacheDir: string): Promise<NEP> => {
  */
 export const scrapeNEP = async (url: string, cacheDir: string, saveDir?: string): Promise<NEP> => {
   const nep = await parseNEP(await fetchHTMLParsed(url, cacheDir), cacheDir);
-  if(!nepTypes.includes(nep.type)) console.log('bad type', nep.id);
-  if(!nepStates.includes(nep.status)) console.log('bad stat', nep.id);
   if(saveDir !== undefined) {
-    outputJSONSync(`data/${saveDir}/${nep.id}.json`, nep, { encoding: 'utf8', spaces: 2 });
+    outputJSONSync(`${saveDir}/${nep.id}.json`, nep, { encoding: 'utf8', spaces: 2 });
   }
   return nep;
 };
