@@ -24,6 +24,8 @@ public interface GitHubService {
     public static class PullRequest {
         String body;
         Date created_at;
+        Date closed_at;
+        Date merged_at;
         GitHubUser user;
     }
 

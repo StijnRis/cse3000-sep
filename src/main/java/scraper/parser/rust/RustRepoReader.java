@@ -19,6 +19,7 @@ import scraper.data.author.Person;
 import scraper.data.author.PersonUsername;
 import scraper.data.proposal.Comment;
 import scraper.data.proposal.Proposal;
+import scraper.data.proposal.StageHistory;
 import scraper.parser.GitHubService;
 import util.Log;
 
@@ -80,6 +81,8 @@ public class RustRepoReader {
                 GitHubService.PullRequest pr = getPullRequestFromAPI(proposal);
                 List<GitHubService.Conversation> conversations = getConversationFromAPI(proposal);
 
+                createStageHistory(pr, proposal);
+                
                 Comment lastComment =  new Comment(commentIndex,
                         getOrCreateAuthor(pr.getUser()),
                         proposal,
@@ -193,6 +196,16 @@ public class RustRepoReader {
         Gson gson = new Gson();
         JsonReader reader = new JsonReader(new FileReader(file));
         return gson.fromJson(reader, GitHubService.GitHubUser.class);
+    }
+
+    private void createStageHistory(GitHubService.PullRequest pr, Proposal proposal) {
+        StageHistory.create(session, proposal, 0, "created", pr.getCreated_at());
+
+        if(pr.getMerged_at() != null) {
+            StageHistory.create(session, proposal, 1, "merged", pr.getMerged_at());
+        } else if(pr.getClosed_at() != null) {
+            StageHistory.create(session, proposal, 1, "closed", pr.getClosed_at());
+        }
     }
 
     private GitHubService.PullRequest getPullRequestFromAPI(Proposal pr) throws IOException {
