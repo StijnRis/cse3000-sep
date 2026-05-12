@@ -36,7 +36,9 @@ public class RelatedProposal {
                     nullable = false)})
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @OnDelete(action = OnDeleteAction.RESTRICT)
-    private Proposal proposal1;
+    private Proposal relatedProposal;
 
-
+    @Enumerated
+    @Column(name = "type")
+    private RelatedProposalType type;
 }

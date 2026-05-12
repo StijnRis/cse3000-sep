@@ -1,35 +1,16 @@
 package scraper.parser.rust;
 
 import lombok.Getter;
-import org.eclipse.jgit.api.Git;
-import org.eclipse.jgit.diff.DiffEntry;
-import org.eclipse.jgit.diff.RenameDetector;
-import org.eclipse.jgit.lib.Constants;
-import org.eclipse.jgit.lib.ObjectId;
-import org.eclipse.jgit.lib.ObjectLoader;
-import org.eclipse.jgit.lib.Repository;
-import org.eclipse.jgit.revwalk.RevCommit;
-import org.eclipse.jgit.revwalk.RevTree;
-import org.eclipse.jgit.storage.file.FileRepositoryBuilder;
-import org.eclipse.jgit.treewalk.TreeWalk;
-import org.eclipse.jgit.treewalk.filter.PathFilter;
 import org.hibernate.Session;
 import scraper.data.*;
 import scraper.data.proposal.Proposal;
 import scraper.data.proposal.ProposalId;
 import scraper.data.proposal.revision.ProposalRevision;
 import scraper.data.proposal.revision.ProposalRevisionAuthor;
-import scraper.data.proposal.revision.ProposalRevisionId;
 import util.Log;
-import util.LogFollowCommand;
 
 import java.io.*;
 import java.net.MalformedURLException;
-import java.net.URI;
-import java.net.URL;
-import java.nio.charset.StandardCharsets;
-import java.sql.Date;
-import java.time.LocalDate;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
@@ -45,10 +26,12 @@ public class RustDataReader {
     @Getter
     private List<ProposalRevisionAuthor> revisionAuthors = new ArrayList<>();
 
+    @Getter
+    private int authorIndex = 5000000; //Assigned project id (5) * 1 million
+
     private Session session;
     private Project project;
     private String rootDirPath;
-    private int authorIndex = 5000000; //Assigned project id (5) * 1 million
 
     public RustDataReader(Session session, Project project, String rootDirPath) {
         this.session = session;
@@ -88,7 +71,7 @@ public class RustDataReader {
                         parseRustRFC(file);
                         success.getAndIncrement();
                     } catch (Exception e) {
-                        Log.warn("Could not parse RFC File: " + file.getName());
+                        Log.warn("RFC Parsing: Could not parse RFC File: " + file.getName());
                         e.printStackTrace();
                         failure.getAndIncrement();
                     }
@@ -144,6 +127,8 @@ public class RustDataReader {
         List<String> lines = proposalReader.readAllLines();
 
         String featureName = null;
+        List<String> rfcPrs = new ArrayList<>();
+        List<String> trackingIssues = new ArrayList<>();
 
         //Iterate through all lines
         for (int i = 0; i < lines.size() ; i++) {
@@ -155,6 +140,19 @@ public class RustDataReader {
                 featureName = extractFeatureName(line);
                 break;
             }
+
+            if(lineLC.startsWith("rfc pr")) {
+                lineLC = lineLC.replace("rfc pr: ", "");
+                rfcPrs = parseMarkdownURLs(lineLC);
+            }
+
+            if(lineLC.startsWith("rust issue") || lineLC.startsWith("tracking issue")) {
+                lineLC = lineLC.replace("rust issue: ", "").replace("tracking issue", "");
+                trackingIssues = parseMarkdownURLs(lineLC);
+            }
+
+            //Early break if possible to save time
+            if(lineLC.startsWith("## Summary")) break;
         }
 
         //Early RFCs did not explicitly contain all fields... or have n/a
@@ -168,7 +166,37 @@ public class RustDataReader {
                 project,
                 null,
                 featureName,
-                "?");
+                "?",
+                rfcPrs,
+                trackingIssues);
+    }
+
+    /**
+     * Extracts the URL from a line with markdown url formatting.
+     */
+    private static List<String> parseMarkdownURLs(String line) throws MalformedURLException {
+        String[] linkedPrs = line.split(", ");
+
+        List<String> prs = new ArrayList<>();
+        for (int i = 0; i < linkedPrs.length; i++) {
+            String url = parseMarkdownURL(linkedPrs[i]);
+
+            if(url.startsWith("http")) {
+                prs.add(url);
+            }
+        }
+
+        return prs;
+    }
+
+    /**
+     * Helper function
+     */
+    private static String parseMarkdownURL(String text) {
+        return text.replaceFirst("\\[.*\\]", "")
+                .replace("(", "")
+                .replace(")", "")
+                .split(" ")[0];
     }
 
     private static String extractFeatureId(String filename) {

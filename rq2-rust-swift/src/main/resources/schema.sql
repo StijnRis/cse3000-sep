@@ -1,8 +1,9 @@
+-- Generated primary keys (person_id, organisation_id, comment_id start at their project_id*1_000_000)
+
 -- 1. Project Table
 CREATE TABLE Project
 (
-    project_id                INTEGER PRIMARY KEY,
-    -- Automatically auto-increments
+    project_id                INTEGER PRIMARY KEY, -- pre-allocated in the table above
     project_name              TEXT NOT NULL,
     enhancement_proposal_name TEXT NOT NULL,
     copyright                 TEXT NOT NULL
@@ -24,9 +25,8 @@ CREATE TABLE Organisation
 CREATE TABLE PersonUsername
 (
     person_id INTEGER NOT NULL,
-    domain    TEXT,
-    username  TEXT,
-    real_name TEXT,
+    domain    TEXT, -- eg “github.com”, “email”
+    username  TEXT, --  e.g. “stijn@tudelft.nl”
     PRIMARY KEY (person_id, domain, username),
     FOREIGN KEY (person_id) REFERENCES Person (person_id)
 );
@@ -45,7 +45,6 @@ CREATE TABLE Proposal
 (
     project_id    INTEGER,
     proposal_id   TEXT,
-    proposer_id   INTEGER,
     topic         TEXT,
     proposal_type TEXT,
     PRIMARY KEY (project_id, proposal_id),
@@ -69,15 +68,17 @@ CREATE TABLE ProposalRevision
 
 CREATE TABLE StageHistory
 (
-    project_id  INTEGER,
-    proposal_id TEXT,
-    stage_index INTEGER,
-    -- ENUM does not exist in SQLite, so we use CHECK constraint
-    status      TEXT     NOT NULL,
-    created_at  DATETIME NOT NULL,
+    project_id        INTEGER,
+    proposal_id       TEXT,
+    stage_index       INTEGER,                                                    -- stage_index increments on raw_status change
+    normalised_status TEXT     NOT NULL CHECK (normalised_status IN ('accepted', 'rejected',
+                                                                     'draft', 'review', 'withdrawn', 'superseded',
+                                                                     'active',
+                                                                     'unknown')), -- superseded -> rejected, null or not clear -> unknown
+    raw_status        TEXT,
+    created_at        DATETIME NOT NULL,
     PRIMARY KEY (project_id, proposal_id, stage_index),
     FOREIGN KEY (project_id, proposal_id) REFERENCES Proposal (project_id, proposal_id)
-
 );
 
 CREATE TABLE ProposalRevisionAuthor
@@ -85,6 +86,7 @@ CREATE TABLE ProposalRevisionAuthor
     project_id     INTEGER,
     proposal_id    TEXT,
     revision_index INTEGER,
+-- multiple rows with the same project_id, proposal_id and revision_index but different author_ids means multiple authors at some revision
     author_id      INTEGER,
     PRIMARY KEY (
                  project_id,
@@ -103,25 +105,25 @@ CREATE TABLE RelatedProposal
     proposal_id         TEXT,
     related_project_id  INTEGER,
     related_proposal_id TEXT,
-    PRIMARY KEY (
-                 project_id,
-                 proposal_id,
-                 related_project_id,
-                 related_proposal_id
-        ),
+    type                TEXT CHECK (type IN ('related', 'supersedes'))
+        PRIMARY KEY (
+        project_id,
+        proposal_id,
+        related_project_id,
+        related_proposal_id
+    ),
     FOREIGN KEY (project_id, proposal_id) REFERENCES Proposal (project_id, proposal_id),
     FOREIGN KEY (related_project_id, related_proposal_id) REFERENCES Proposal (project_id, proposal_id)
 );
-
 CREATE TABLE Comment
 (
     comment_id            INTEGER PRIMARY KEY,
-    author_id             INTEGER,
-    project_id            INTEGER,
-    proposal_id           TEXT,
-    comment_on_comment_id INTEGER,
-    created_at            DATETIME DEFAULT CURRENT_TIMESTAMP,
-    content               TEXT NOT NULL,
+    author_id             INTEGER NOT NULL,
+    project_id            INTEGER NOT NULL,
+    proposal_id           TEXT    NOT NULL,
+    comment_on_comment_id INTEGER, -- id of parent comment, null if root comment (discussion, issue, pr, etc.)
+    created_at            DATETIME,
+    content               TEXT    NOT NULL,
     FOREIGN KEY (author_id) REFERENCES Person (person_id),
     FOREIGN KEY (comment_on_comment_id) REFERENCES Comment (comment_id),
     FOREIGN KEY (project_id, proposal_id) REFERENCES Proposal (project_id, proposal_id)

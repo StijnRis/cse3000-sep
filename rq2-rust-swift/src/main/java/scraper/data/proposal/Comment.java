@@ -1,21 +1,24 @@
 package scraper.data.proposal;
 
 import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.hibernate.annotations.OnDelete;
 import org.hibernate.annotations.OnDeleteAction;
 import scraper.data.author.Person;
 
-import java.time.Instant;
+import java.sql.Date;
 
 @Getter
 @Setter
 @Entity
+@NoArgsConstructor
+@AllArgsConstructor
 @Table(name = "Comment")
 public class Comment {
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "comment_id", nullable = false)
     private Integer id;
 
@@ -39,7 +42,7 @@ public class Comment {
     private Comment commentOnComment;
 
     @Column(name = "created_at")
-    private Instant createdAt;
+    private Date createdAt;
 
     @Lob
     @Column(name = "content", nullable = false)

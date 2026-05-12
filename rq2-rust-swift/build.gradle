@@ -23,7 +23,10 @@ dependencies {
     implementation("org.hibernate.orm:hibernate-community-dialects:7.3.2.Final")
     implementation "jakarta.transaction:jakarta.transaction-api"
     implementation("org.eclipse.jgit:org.eclipse.jgit:7.6.0.202603022253-r")
-
+    implementation 'org.jsoup:jsoup:1.22.2'
+    implementation("com.squareup.retrofit2:retrofit:3.0.0")
+    implementation("com.squareup.retrofit2:converter-gson:3.0.0")
+    implementation 'com.squareup.okhttp3:logging-interceptor:3.5.0'
 
     testImplementation('org.junit.jupiter:junit-jupiter:5.14.3')
     testRuntimeOnly('org.junit.platform:junit-platform-launcher')

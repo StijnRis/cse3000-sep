@@ -1,16 +1,23 @@
 package scraper.data.proposal;
 
 import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.Session;
+import org.hibernate.Transaction;
 import org.hibernate.annotations.OnDelete;
 import org.hibernate.annotations.OnDeleteAction;
 
+import java.sql.Date;
 import java.time.Instant;
 
 @Getter
 @Setter
 @Entity
+@NoArgsConstructor
+@AllArgsConstructor
 @Table(name = "StageHistory")
 public class StageHistory {
     @EmbeddedId
@@ -29,11 +36,34 @@ public class StageHistory {
     private Proposal proposal;
 
     @Lob
-    @Column(name = "status", nullable = false)
-    private String status;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "normalised_status", nullable = false)
+    private NormalizedStatus normalizedStatus;
+
+    @Lob
+    @Column(name = "raw_status")
+    private String rawStatus;
 
     @Column(name = "created_at", nullable = false)
-    private Instant createdAt;
+    private Date createdAt;
 
+    public static StageHistory create(Session session, Proposal proposal, int stageIndex, String rawStatus, Date createdAt) {
+        StageHistoryId shId = new StageHistoryId(proposal.getProject().getId(), proposal.getId().getProposalId(), stageIndex);
+        StageHistory sh = new StageHistory(shId, proposal, mapStatus(rawStatus), rawStatus, createdAt);
 
+        Transaction tx = session.beginTransaction();
+        session.persist(sh);
+        tx.commit();
+
+        return sh;
+    }
+
+    private static NormalizedStatus mapStatus(String status) {
+        return switch(status) {
+            case "created", "open" -> NormalizedStatus.active;
+            case "merged" -> NormalizedStatus.accepted;
+            case "closed" -> NormalizedStatus.rejected;
+            default -> NormalizedStatus.unknown;
+        };
+    }
 }

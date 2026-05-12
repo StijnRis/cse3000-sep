@@ -1,37 +1,25 @@
 package scraper.parser.rust;
 
-import jakarta.persistence.criteria.CriteriaBuilder;
-import jakarta.persistence.criteria.CriteriaQuery;
-import jakarta.persistence.criteria.Root;
 import lombok.Getter;
-import lombok.Setter;
 import org.eclipse.jgit.lib.PersonIdent;
 import org.eclipse.jgit.revwalk.RevCommit;
 import org.hibernate.Session;
-import org.hibernate.Transaction;
-import org.hibernate.query.Query;
 import scraper.data.Project;
 import scraper.data.author.Person;
+import scraper.data.author.PersonUsername;
 import scraper.data.proposal.Proposal;
 import scraper.data.proposal.revision.ProposalRevision;
 import scraper.data.proposal.revision.ProposalRevisionAuthor;
 import scraper.data.proposal.revision.ProposalRevisionAuthorId;
 import scraper.data.proposal.revision.ProposalRevisionId;
 import scraper.parser.GitReader;
-import util.Log;
 
 import java.io.IOException;
-import java.net.MalformedURLException;
-import java.net.URI;
-import java.net.URL;
 import java.sql.Date;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Scanner;
+import java.util.*;
 import java.util.stream.Collectors;
 
 public class RustDataParser {
@@ -71,7 +59,6 @@ public class RustDataParser {
             RevCommit commit = commits.get(i);
 
             String fileContent = gitReader.getFileContents(commit.getTree(), commit);
-            ProposalData data = extractDataFromLines(fileContent);
 
             Instant time = commit.getAuthorIdent().getWhenAsInstant();
             Date createdAt = Date.valueOf(LocalDate.ofInstant(time, ZoneId.systemDefault()));
@@ -85,7 +72,7 @@ public class RustDataParser {
             ProposalRevision pr = new ProposalRevision(
                     prId,
                     proposal,
-                    data.featureName,
+                    extractDataFromLines(fileContent),
                     createdAt,
                     fileContent,
                     ""
@@ -103,7 +90,7 @@ public class RustDataParser {
      * Extracts author data from a commit
      */
     private void extractAuthor(ProposalRevisionId prId, ProposalRevision pr, PersonIdent ident) throws Exception {
-        Person person = getOrCreateAuthor(ident.getName());
+        Person person = getOrCreateAuthor(ident);
 
         ProposalRevisionAuthorId praId = new ProposalRevisionAuthorId(
                 prId.getProjectId(),
@@ -119,34 +106,27 @@ public class RustDataParser {
      * Helper function to keep code easily readable.
      * Checks database if the person already exists, and creates them if not.
      */
-    private Person getOrCreateAuthor(String name) {
-        CriteriaBuilder cb = session.getCriteriaBuilder();
-        CriteriaQuery<Person> cq = cb.createQuery(Person.class);
-        Root<Person> root = cq.from(Person.class);
-        cq.select(root).where(cb.equal(root.get("fullName"), name));
+    private Person getOrCreateAuthor(PersonIdent ident) {
+        Optional<Person> author = Person.findAuthorByName(session, ident.getName());
+        if(author.isEmpty()) author = Person.findAuthorByEmail(session, ident.getEmailAddress());
 
-        Query<Person> query = session.createQuery(cq);
-        List<Person> results = query.getResultList();
-
-        if(results.isEmpty()) { //Create new
-            Person person = new Person(authorIndex, name);
+        if(author.isEmpty()) { //Create new
+            Person person = Person.create(session, authorIndex, ident.getName());
             authorIndex++;
 
-            Transaction tx = session.beginTransaction();
-            session.persist(person);
-            tx.commit();
+            PersonUsername.create(session, person, "email", ident.getEmailAddress());
             return person;
         } else {
-            return results.getFirst();
+            return author.get();
         }
     }
 
     /**
-     * Extracts some basic information from the first few lines of the markdown file containing the proposal.
+     * Extract feature name from the first few lines of the markdown file containing the proposal.
      */
-    private ProposalData extractDataFromLines(String fileContent) throws Exception {
+    private String extractDataFromLines(String fileContent) throws Exception {
         Scanner scanner = new Scanner(fileContent);
-        ProposalData data = new ProposalData();
+        String featureName = null;
 
         while (scanner.hasNextLine()) {
             //Remove any unnecessary markdown formatting
@@ -154,18 +134,8 @@ public class RustDataParser {
             String lineLC = line.toLowerCase();
 
             if(lineLC.startsWith("feature name")) {
-                data.featureName = extractFeatureName(line);
+                featureName = extractFeatureName(line);
                 break;
-            }
-
-            if(lineLC.startsWith("rfc pr")) {
-                lineLC = lineLC.replace("rfc pr: ", "");
-                data.rfcPrs = parseMarkdownURLs(lineLC);
-            }
-
-            if(lineLC.startsWith("rust issue") || lineLC.startsWith("tracking issue")) {
-                lineLC = lineLC.replace("rust issue: ", "").replace("tracking issue", "");
-                data.trackingIssues = parseMarkdownURLs(lineLC);
             }
 
             //Early break if possible to save time
@@ -173,41 +143,12 @@ public class RustDataParser {
         }
 
         //Early RFCs did not explicitly contain all fields... or have n/a
-        if(data.featureName == null || data.featureName.equals("n/a")) {
-            data.featureName = extractFeatureNameBackup(fileName);
+        if(featureName == null || featureName.equals("n/a")) {
+            featureName = extractFeatureNameBackup(fileName);
         }
 
-        return data;
+        return featureName;
     }
-
-    /**
-     * Extracts the URL from a line with markdown url formatting.
-     */
-    private static List<URL> parseMarkdownURLs(String line) throws MalformedURLException {
-        String[] linkedPrs = line.split(", ");
-
-        List<URL> prs = new ArrayList<>();
-        for (int i = 0; i < linkedPrs.length; i++) {
-            String url = parseMarkdownURL(linkedPrs[i]);
-
-            if(url.startsWith("http")) {
-                prs.add(URI.create(url).toURL());
-            }
-        }
-
-        return prs;
-    }
-
-    /**
-     * Helper function
-     */
-    private static String parseMarkdownURL(String text) {
-        return text.replaceFirst("\\[.*\\]", "")
-                .replace("(", "")
-                .replace(")", "")
-                .split(" ")[0];
-    }
-
 
     /**
      * Deprecated, using commit date as date now.
@@ -239,12 +180,4 @@ public class RustDataParser {
         //Remove the number identifier prefix, remove trailing filetype and turn dashes into spaces
         return Arrays.stream(fileName.split("-")).skip(1).collect(Collectors.joining(" ")).replace(".md", "");
     }
-}
-
-@Getter
-@Setter
-class ProposalData {
-    String featureName;
-    List<URL> rfcPrs;
-    List<URL> trackingIssues;
 }

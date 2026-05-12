@@ -6,7 +6,7 @@ import java.util.Objects;
 
 public class ArgumentHandler {
 
-    public static String[] validOptions = new String[]{"local", "remote", "project"};
+    public static String[] validOptions = new String[]{"local", "remote", "project", "token"};
     public static String[] validProjects = new String[]{"rust", "swift"};
 
     public static Map<String, String> parseArgs(String[] args) throws IllegalArgumentException {
@@ -17,8 +17,7 @@ public class ArgumentHandler {
             throw new IllegalArgumentException("Invalid number of arguments provided");
         }
 
-        //Guaranteed to be divisible by 2
-        for(int i = 0; i < (args.length / 2)+1; i=i+2)  {
+        for(int i = 0; i < args.length; i=i+2)  {
             String option = args[i];
             String value = args[i+1];
 
@@ -77,9 +76,16 @@ public class ArgumentHandler {
         if(!rootDir.exists() || !rootDir.isDirectory()) {
             throw new IllegalArgumentException("Provided path is not an existing directory.");
         }
+
+        if(!value.endsWith("/")) {
+            throw new IllegalArgumentException("Path must end with / for internal reasons.");
+        }
     }
 
     private static void validateRemote(String value) {
+        if(!value.endsWith("/")) {
+            throw new IllegalArgumentException("Path must end with / for internal reasons.");
+        }
         //TODO
     }
 }
