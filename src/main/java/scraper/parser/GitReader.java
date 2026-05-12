@@ -41,7 +41,7 @@ public class GitReader {
      * @return List of all commits for the file specified during creation
      */
     public List<RevCommit> readProjectGit() throws Exception {
-        Log.log("GitReader: Started");
+        Log.log("RFC Parsing - GitReader: Started");
 
         ArrayList<RevCommit> proposals = new ArrayList<>();
         proposals.addAll(lfc.call());

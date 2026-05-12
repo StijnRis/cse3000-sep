@@ -51,6 +51,7 @@ public class RustScraper {
 
         if(arguments.get("project").equals("rust")) {
             if(arguments.containsKey("remote")) {
+                Log.log("Pulling latest changes from GitHub");
                 downloadRustRepository(gitRootFolder);
             }
 

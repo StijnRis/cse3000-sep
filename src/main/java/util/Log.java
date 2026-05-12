@@ -12,6 +12,10 @@ public class Log {
         System.out.printf("[LOG]%1$s %2$s\n", getTime(), text);
     }
 
+    public static void oLog(String text) {
+        System.out.printf("[LOG]%1$s %2$s\r", getTime(), text);
+    }
+
     public static void warn(String text) {
         System.out.printf("[WARN]%1$s %2$s\n", getTime(), text);
     }

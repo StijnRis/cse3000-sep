@@ -116,7 +116,7 @@ public class RustRepoReader {
             double r = (double) failure / (success+failure);
 
             //Metric reporting for my own debugging of the parser
-            Log.log(String.format("GitHub Scraping: %s completed, %s failed. Failure rate: %s", success, failure, r));
+            Log.log(String.format("GitHub Scraping:  %s completed, %s failed. Failure rate: %s", success, failure, r));
         }
     }
 
@@ -176,7 +176,7 @@ public class RustRepoReader {
         File possibleCache = new File(cacheDir + "gh_user_" + user.getLogin() + ".json");
 
         if(!ignoreCached && possibleCache.isFile()) {
-            Log.log("GitHub Scraping: Cache hit: " + possibleCache.getName());
+            Log.oLog("GitHub Scraping: Cache hit: " + possibleCache.getName());
             return parseUserFromFile(possibleCache);
         }
 
@@ -199,7 +199,7 @@ public class RustRepoReader {
         File possibleCache = new File(cacheDir + "pr_" + pr.getId().getProposalId() + ".json");
 
         if(!ignoreCached && possibleCache.isFile()) {
-            Log.log("GitHub Scraping: Cache hit: " + possibleCache.getName());
+            Log.oLog("GitHub Scraping: Cache hit: " + possibleCache.getName());
             return parsePrFromFile(possibleCache);
         }
 
@@ -222,7 +222,7 @@ public class RustRepoReader {
         File possibleCache = new File(cacheDir + "conv_" + pr.getId().getProposalId() + ".json");
 
         if(!ignoreCached && possibleCache.isFile()) {
-            Log.log("GitHub Scraping: Cache hit: " + possibleCache.getName());
+            Log.oLog("GitHub Scraping: Cache hit: " + possibleCache.getName());
             return parseConservationsFromFile(possibleCache);
         }
 
