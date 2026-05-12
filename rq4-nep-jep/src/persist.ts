@@ -7,96 +7,102 @@ import 'reflect-metadata';
 
 @Entity('Project')
 export class ProjectSQL {
-  @PrimaryColumn()
+  @PrimaryColumn({type: 'integer'})
   project_id: number;
-  @Column()
+  @Column({type: 'text'})
   project_name: string;
-  @Column()
+  @Column({type: 'text'})
   enhancement_proposal_name: string;
-  @Column()
+  @Column({type: 'text'})
   copyright: string;
 };
 
 @Entity('Person')
 class PersonSQL {
-  @PrimaryColumn()
+  @PrimaryColumn({type: 'integer'})
   person_id: number;
-  @Column()
+  @Column({type: 'text'})
   full_name: string;
 };
 
 @Entity('PersonUsername')
 class PersonUsernameSQL {
-  @PrimaryColumn()
+  @PrimaryColumn({type: 'integer'})
   person_id: number;
   @ManyToOne(() => PersonSQL) @JoinColumn({name: 'person_id', referencedColumnName: 'person_id'})
   person: PersonSQL; //fk
-  @PrimaryColumn()
+  @PrimaryColumn({type: 'text'})
   domain: string;
-  @PrimaryColumn()
+  @PrimaryColumn({type: 'text'})
   username: string;
 };
 
 @Entity('Proposal')
 class ProposalSQL {
-  @PrimaryColumn()
+  @PrimaryColumn({type: 'integer'})
   project_id: number;
   @ManyToOne(() => ProjectSQL) @JoinColumn({name: 'project_id', referencedColumnName: 'project_id'})
   project: ProjectSQL; //fk
-  @PrimaryColumn()
+  @PrimaryColumn({type: 'text'})
   proposal_id: string;
-  @Column({nullable: true})
+  @Column({type: 'text', nullable: true})
   topic?: string;
-  @Column({nullable: true})
+  @Column({type: 'text', nullable: true})
   proposal_type?: string;
 };
 
 @Entity('ProposalRevision')
 class ProposalRevisionSQL {
-  @PrimaryColumn()
+  @PrimaryColumn({type: 'integer'})
   project_id: number;
-  @PrimaryColumn()
+  @PrimaryColumn({type: 'text'})
   proposal_id: string;
   @ManyToOne(() => ProposalSQL) @JoinColumn([
     {name: 'project_id', referencedColumnName: 'project_id'},
     {name: 'proposal_id', referencedColumnName: 'proposal_id'},
   ])
   proposal: ProposalSQL; //fk'
-  @PrimaryColumn()
+  @PrimaryColumn({type: 'integer'})
   revision_index: number;
-  @Column()
+  @Column({type: 'text'})
   title: string;
-  @Column()
-  created_at: Date;
-  @Column()
+  @Column({type: 'datetime'})
+  created_at: string; //date
+  @Column({type: 'text'})
   content: string;
-  @Column({nullable: true})
+  @Column({type: 'text', nullable: true})
   implemented_at_version?: string;
   @ManyToMany(() => PersonSQL) @JoinTable({
-    name: 'ProposalRevisionAuthor', inverseJoinColumn: {name: 'author_id', referencedColumnName: 'person_id'}
+    name: 'ProposalRevisionAuthor',
+    joinColumns: [
+      {name: 'project_id', referencedColumnName: 'project_id'},
+      {name: 'proposal_id', referencedColumnName: 'proposal_id'},
+      {name: 'revision_index', referencedColumnName: 'revision_index'},
+    ],
+    inverseJoinColumns: [{name: 'author_id', referencedColumnName: 'person_id'}],
   })
   authors: PersonSQL[];
 };
 
 @Entity('StageHistory')
 class StageHistorySQL {
-  @PrimaryColumn()
+  @PrimaryColumn({type: 'integer'})
   project_id: number;
-  @PrimaryColumn()
+  @PrimaryColumn({type: 'text'})
   proposal_id: string;
   @ManyToOne(() => ProposalSQL) @JoinColumn([
     {name: 'project_id', referencedColumnName: 'project_id'},
     {name: 'proposal_id', referencedColumnName: 'proposal_id'},
   ])
   proposal: ProposalSQL; //fk'
-  @PrimaryColumn()
+  @PrimaryColumn({type: 'integer'})
   stage_index: number;
-  @Column()
+  @Column({type: 'text'})
   normalised_status: 'accepted' | 'rejected' | 'draft' | 'review' | 'withdrawn' | 'superseded' | 'active' | 'unknown';
-  @Column({nullable: true})
+  @Column({type: 'text', nullable: true})
   raw_status?: string;
-  @Column()
-  created_at: Date;
+  @Column({type: 'datetime'})
+  created_at: string; //date
 };
 
 // class ProposalRevisionAuthorSQL { //many to many
@@ -108,26 +114,26 @@ class StageHistorySQL {
 
 @Entity('Comment')
 class CommentSQL {
-  @PrimaryColumn()
+  @PrimaryColumn({type: 'integer'})
   comment_id: number;
-  @Column()
+  @Column({type: 'integer'})
   author_id: number;
   @ManyToOne(() => PersonSQL) @JoinColumn({name: 'author_id', referencedColumnName: 'person_id'})
   author: PersonSQL; //fk
-  @Column()
+  @Column({type: 'integer'})
   project_id: number;
-  @Column()
+  @Column({type: 'text'})
   proposal_id: string;
   @ManyToOne(() => ProposalSQL) @JoinColumn([
     {name: 'project_id', referencedColumnName: 'project_id'},
     {name: 'proposal_id', referencedColumnName: 'proposal_id'},
   ])
   proposal: ProposalSQL; //fk'
-  @Column({nullable: true}) //@ForeignKey(() => CommentSQL, {deferrable: 'INITIALLY DEFERRED'}) @JoinColumn({name: 'comment_on_comment_id'})
+  @Column({type: 'integer', nullable: true}) //@ForeignKey(() => CommentSQL, {deferrable: 'INITIALLY DEFERRED'}) @JoinColumn({name: 'comment_on_comment_id'})
   comment_on_comment_id?: number; //fk''
-  @Column()
-  created_at: Date;
-  @Column()
+  @Column({type: 'datetime'})
+  created_at: string; //date
+  @Column({type: 'text'})
   content: string;
 };
 
@@ -264,7 +270,7 @@ export class JEPPersister extends Persister<JEP> {
           proposal,
           revision_index: idx,
           title: jep.title,
-          created_at: jep.created,
+          created_at: jep.created.toISOString(),
           content: jep.content,
           implemented_at_version: jep.release,
           authors: allAuthorIDs.keys().toArray().map(id => this.db.person.get(id)!),
@@ -284,7 +290,7 @@ export class JEPPersister extends Persister<JEP> {
           stage_index: idx,
           normalised_status: this.normalizeStatus(jep.status),
           raw_status: jep.status,
-          created_at: jep.created,
+          created_at: jep.created.toISOString(),
         });
         for(const comment of jep.comments) {
           const newID = this.generateNumID(this.db.comment.size);
@@ -296,7 +302,7 @@ export class JEPPersister extends Persister<JEP> {
             project_id: proposal.project_id,
             proposal_id: proposal.proposal_id,
             proposal,
-            created_at: comment.created,
+            created_at: comment.created.toISOString(),
             content: comment.content,
           });
         }
@@ -372,7 +378,7 @@ export class NEPPersister extends Persister<NEP> {
           proposal,
           revision_index: idx,
           title: nep.title,
-          created_at: nep.created,
+          created_at: nep.created.toISOString(),
           content: nep.content,
           authors: allAuthorIDs.map(id => this.db.person.get(id)!),
         });
@@ -391,7 +397,7 @@ export class NEPPersister extends Persister<NEP> {
           stage_index: idx,
           normalised_status: this.normalizeStatus(nep.status),
           raw_status: nep.status,
-          created_at: nep.created,
+          created_at: nep.created.toISOString(),
         });
         for(const comment of nep.comments) {
           const author = this.db.person.get(
@@ -407,7 +413,7 @@ export class NEPPersister extends Persister<NEP> {
             project_id: proposal.project_id,
             proposal_id: proposal.proposal_id,
             proposal,
-            created_at: comment.created,
+            created_at: comment.created.toISOString(),
             comment_on_comment_id: comment.replyTo !== undefined
               ? commentToID.get(comment.replyTo)
               : undefined,
