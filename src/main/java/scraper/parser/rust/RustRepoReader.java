@@ -4,6 +4,9 @@ package scraper.parser.rust;
 import com.google.gson.Gson;
 import com.google.gson.stream.JsonReader;
 import lombok.Getter;
+import okhttp3.Interceptor;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
 import okhttp3.ResponseBody;
 import org.hibernate.Session;
 import org.jsoup.Jsoup;
@@ -54,17 +57,14 @@ public class RustRepoReader {
     private int commentIndex = 5000000; //Assigned project id (5) * 1 million
     private int organisationIndex = 5000000;
 
-    public RustRepoReader(Session session, String cacheDir, boolean ignoreCached, List<Proposal> proposals, int authorIndex) {
+    public RustRepoReader(Session session, String authToken, String cacheDir, boolean ignoreCached, List<Proposal> proposals, int authorIndex) {
         this.session = session;
         this.cacheDir = cacheDir;
         this.ignoreCached = ignoreCached;
         this.proposals = proposals;
         this.authorIndex = authorIndex;
 
-        retrofit = new Retrofit.Builder()
-                .baseUrl("https://api.github.com")
-                .addConverterFactory(GsonConverterFactory.create())
-                .build();
+        retrofit = buildRetrofit(authToken);
         service = retrofit.create(GitHubService.class);
     }
 
@@ -277,9 +277,29 @@ public class RustRepoReader {
         writer.close();
     }
 
+    private Retrofit buildRetrofit(String authToken) {
+        Retrofit.Builder retrofit = new Retrofit.Builder()
+                .baseUrl("https://api.github.com")
+                .addConverterFactory(GsonConverterFactory.create());
 
+        if (authToken == null) return retrofit.build();
 
+        // Source - https://stackoverflow.com/a/41082979
+        // Posted by iagreen
+        // Retrieved 2026-05-12, License - CC BY-SA 3.0
 
+        OkHttpClient client = new OkHttpClient.Builder().addInterceptor(new Interceptor() {
+            @Override
+            public okhttp3.Response intercept(Chain chain) throws IOException {
+                Request newRequest  = chain.request().newBuilder()
+                        .addHeader("Authorization", "Bearer " + authToken)
+                        .build();
+                return chain.proceed(newRequest);
+            }
+        }).build();
+
+        return retrofit.client(client).build();
+    }
 
     @Deprecated
     private List<Comment> getComments(Proposal proposal, Document doc) throws IOException {

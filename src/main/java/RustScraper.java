@@ -69,7 +69,7 @@ public class RustScraper {
 
     private static void scrapeGitHubPRs(Session s, String cacheFolder) {
         try {
-            rr = new RustRepoReader(s, cacheFolder, false, dr.getProposals(), dr.getAuthorIndex());
+            rr = new RustRepoReader(s, arguments.get("token"), cacheFolder, false, dr.getProposals(), dr.getAuthorIndex());
 
             rr.scrapeGitHubData();
 
@@ -82,10 +82,16 @@ public class RustScraper {
 
 
     private static void downloadRustRepository(String rootFolder) throws Exception {
-        Git.cloneRepository()
-                .setURI("https://github.com/rust-lang/rfcs.git")
-                .setDirectory(new File(rootFolder))
-                .call();
+        File rFFile = new File(rootFolder);
+        if(rFFile.isDirectory()) {
+            Git.open(rFFile)
+                    .pull();
+        } else {
+            Git.cloneRepository()
+                    .setURI("https://github.com/rust-lang/rfcs.git")
+                    .setDirectory(rFFile)
+                    .call();
+        }
     }
 
     private static void scrapeLocalFiles(Session s, String rootFolder) {
