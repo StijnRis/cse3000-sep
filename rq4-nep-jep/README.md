@@ -21,3 +21,9 @@ npm run scrape-nep <database file name> <cache folder name> <intermediate save f
 # Notes
 
 For the exact schema that is output, see `src/persist.ts`.
+
+JEP data is obtained from the [OpenJDK main website](https://openjdk.org/jeps/0) (metadata, content) and the [dedicated issues website](https://bugs.openjdk.org) (some metadata, comments).
+
+NEP data is obtained from the [NumPy website](https://numpy.org/neps) (metadata, content), which also links to the [mailing list](https://mail.python.org/archives/list/numpy-discussion@python.org/) and [GitHub repo](https://github.com/numpy/numpy/) (discussions).
+
+The file `nep-missing-dates.json` contains the oldest date from the GitHub history for the NEPs that didn't have a creation date written on the website. They are used as creation dates.
