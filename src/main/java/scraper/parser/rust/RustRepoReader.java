@@ -13,6 +13,8 @@ import retrofit2.Call;
 import retrofit2.Response;
 import retrofit2.Retrofit;
 import retrofit2.converter.gson.GsonConverterFactory;
+import scraper.data.author.Affiliation;
+import scraper.data.author.Organisation;
 import scraper.data.author.Person;
 import scraper.data.author.PersonUsername;
 import scraper.data.proposal.Comment;
@@ -49,6 +51,7 @@ public class RustRepoReader {
     //State variables
     private int rateLimit = 1;
     private int commentIndex = 5000000; //Assigned project id (5) * 1 million
+    private int organisationIndex = 5000000;
 
     public RustRepoReader(Session session, String cacheDir, boolean ignoreCached, List<Proposal> proposals, int authorIndex) {
         this.session = session;
@@ -57,12 +60,8 @@ public class RustRepoReader {
         this.proposals = proposals;
         this.authorIndex = authorIndex;
 
-//        HttpLoggingInterceptor ic = new HttpLoggingInterceptor().setLevel(HttpLoggingInterceptor.Level.BODY);
-//        OkHttpClient client = new OkHttpClient.Builder().addInterceptor(ic).build();
-
         retrofit = new Retrofit.Builder()
                 .baseUrl("https://api.github.com")
-//                .client(client)
                 .addConverterFactory(GsonConverterFactory.create())
                 .build();
         service = retrofit.create(GitHubService.class);
@@ -114,7 +113,7 @@ public class RustRepoReader {
                 failure++;
             }
 
-            double r = (double) success / (success+failure);
+            double r = (double) failure / (success+failure);
 
             //Metric reporting for my own debugging of the parser
             Log.log(String.format("GitHub Scraping: %s completed, %s failed. Failure rate: %s", success, failure, r));
@@ -135,7 +134,7 @@ public class RustRepoReader {
 
             PersonUsername.create(session, person, "github", user.getLogin());
             if(user.getEmail() != null) PersonUsername.create(session, person, "email", user.getEmail());
-            //Todo company
+            if(user.getCompany() != null) getOrCreateAffiliation(user.getCompany(), person);
 
             return person;
         }
@@ -149,6 +148,8 @@ public class RustRepoReader {
             PersonUsername.create(session, author.get(), "email", user.getEmail());
         }
 
+        if (user.getCompany() != null) getOrCreateAffiliation(user.getCompany(), author.get());
+
         //This should always be last!
         if (user.getName() != null && Person.findAuthorByName(session, user.getName()).isEmpty()) {
             Person updated = author.get();
@@ -157,6 +158,18 @@ public class RustRepoReader {
         }
 
         return author.get();
+    }
+
+    private Affiliation getOrCreateAffiliation(String orgName, Person person) {
+        Optional<Organisation> org = Organisation.findByName(session, orgName);
+        if(org.isEmpty()) {
+            org = Optional.of(Organisation.create(session, organisationIndex, orgName));
+            organisationIndex++;
+        }
+
+        Optional<Affiliation> aff = Affiliation.find(session, org.get(), person);
+        if(aff.isEmpty()) return Affiliation.create(session, org.get(), person);
+        return aff.get();
     }
 
     private GitHubService.GitHubUser getFullUserFromAPI(GitHubService.GitHubUser user) throws IOException {
