@@ -1,9 +1,11 @@
 import { parse, HTMLElement } from 'node-html-parser';
 import { XMLParser } from 'fast-xml-parser';
 import { readFileSync, existsSync } from 'node:fs';
+import { Readable } from 'node:stream';
 import efs from 'fs-extra';
 const { outputFileSync } = efs;
-import type { SEP, GithubUser, GithubComment, GithubCommentJSON } from '../types.d.ts';
+import type { SEP, GithubUser, GithubComment, GithubCommentJSON, Email } from '../types.d.ts';
+import { mboxParser, ParsedMail } from 'mbox-parser';
 
 /**
  * Fetch page of given URL
@@ -29,7 +31,7 @@ const fetchParsed = async (url: string, contentType: 'html' | 'xml' | 'json', ca
 /**
  * Fetch HTML page
  * Caches by default
- * @param url URL to fetch
+ * @param url URL to fetch (without https://)
  * @param cacheDir cache folder, empty string for no caching
  * @param headers optional HTTP headers
  * @returns parsed HTMLElement
@@ -41,7 +43,7 @@ export const fetchHTMLParsed = async (url: string, cacheDir: string, headers?: H
 /**
  * Fetch XML page
  * Caches by default
- * @param url URL to fetch
+ * @param url URL to fetch (without https://)
  * @param parser XML parser
  * @param cacheDir cache folder, empty string for no caching
  * @param headers optional HTTP headers
@@ -54,7 +56,7 @@ export const fetchXMLParsed = async (url: string, parser: XMLParser, cacheDir: s
 /**
  * Fetch JSON response
  * Caches by default
- * @param url URL to fetch
+ * @param url URL to fetch (without https://)
  * @param cacheDir cache folder, empty string for no caching
  * @param headers optional HTTP headers
  * @returns parsed JSON object
@@ -63,6 +65,14 @@ export const fetchJSONParsed = async <T>(url: string, cacheDir: string, headers?
   return JSON.parse(await fetchParsed(url, 'json', cacheDir, headers));
 };
 
+/**
+ * Download file
+ * @param url URL to fetch (without https://)
+ * @param contentType response content type, as file extension (zip, gz)
+ * @param cacheDir cache folder, empty string for no caching
+ * @param headers optional HTTP headers
+ * @returns file as blob
+ */
 export const fetchFile = async (url: string, contentType: string, cacheDir: string, headers?: HeadersInit): Promise<Blob> => {
   const cacheFile = `${cacheDir}/${url}.${contentType}`;
   let resBlob: Blob;
@@ -87,6 +97,11 @@ export const githubIssuesAPI = (owner: string, repo: string, issueID: number) =>
 
 export const pythonMailListURL = (list: string, threadID: string, fileName: string) =>
   `mail.python.org/archives/list/${list}@python.org/export/${fileName}.mbox.gz?thread=${threadID}`;
+export const pythonMailIntervalURL = (list: string,
+  fromYear: number, fromMonth: number, fromDay: number,
+  toYear: number, toMonth: number, toDay: number,
+  fileName: string
+) => `mail.python.org/archives/list/${list}@python.org/export/${fileName}.mbox.gz?start=${fromYear}-${fromMonth}-${fromDay}&end=${toYear}-${toMonth}-${toDay}`;
 
 const ghHeaders: HeadersInit = {
   'Accept': 'application/vnd.github+json',
@@ -121,6 +136,35 @@ export const parseGithubCommentJSON = async ({
   created: new Date(created_at),
   body,
 });
+
+export const parseMboxEmail = ({
+  messageId,
+  inReplyTo,
+  from,
+  date,
+  text,
+}: ParsedMail): Email => ({
+  id: messageId!,
+  replyTo: inReplyTo,
+  author: {
+    email: from!.value[0].address!,
+    name: from!.value[0].name,
+  },
+  created: date!,
+  body: text!,
+});
+
+/**
+ * Get an archive of emails in mbox format and parse them
+ * @param url URL returning a .mbox.gz file
+ * @param cacheDir cache folder
+ * @returns list of parsed email objects
+ */
+export const fetchEmails = async (url: string, cacheDir: string): Promise<ParsedMail[]> => {
+  const gzBlob = await fetchFile(url, 'gz', cacheDir);
+  const unpacked = gzBlob.stream().pipeThrough(new DecompressionStream('gzip'));
+  return await mboxParser(Readable.from(unpacked));
+}
 
 /**
  * Groups SEPs by the ID of their latest revision

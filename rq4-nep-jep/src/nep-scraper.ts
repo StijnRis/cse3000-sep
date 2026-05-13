@@ -1,9 +1,7 @@
 import { HTMLElement } from 'node-html-parser';
 import efs from 'fs-extra';
-import { Readable } from 'node:stream';
 const { outputJSONSync } = efs;
-import { mboxParser } from 'mbox-parser';
-import { fetchFile, fetchHTMLParsed, fetchJSONParsed, ghAuthHeaders, githubIssuesAPI, githubPullsAPI, parseGithubCommentJSON, pythonMailListURL } from './common.ts';
+import { fetchEmails, fetchHTMLParsed, fetchJSONParsed, ghAuthHeaders, githubIssuesAPI, githubPullsAPI, parseGithubCommentJSON, parseMboxEmail, pythonMailIntervalURL, pythonMailListURL } from './common.ts';
 import type { SEP, EmailUser, Email, GithubComment, GithubCommentJSON } from '../types.d.ts';
 import nepDates from '../nep-missing-dates.json' with {type: 'json'};
 
@@ -51,27 +49,41 @@ export const isGithubComment = (comm: NEPComment): comm is GithubComment => Obje
  */
 const collectNEPComments = async (url: string, cacheDir: string): Promise<NEPComment[]> => {
   /**
-   * Fetch emails from given thread using archive download URL
+   * Fetch emails from given thread using HyperKitty archive download URL
    * @todo support pipermail (older version, no explicit download URL)
    * @param threadID HyperKitty thread ID
    * @returns list of email objects in thread
    */
   const collectArchiveEmails = async (threadID: string): Promise<Email[]> => {
     const mailAPI = pythonMailListURL('numpy-discussion', threadID, threadID);
-    const gzBlob = await fetchFile(mailAPI, 'gz', cacheDir);
-    const unpacked = gzBlob.stream().pipeThrough(new DecompressionStream('gzip'));
-    const mails = await mboxParser(Readable.from(unpacked));
-    return mails.map(m => ({
-      id: m.messageId!,
-      replyTo: m.inReplyTo,
-      author: {
-        email: m.from!.value[0].address!,
-        name: m.from!.value[0].name,
-      },
-      created: m.date!,
-      body: m.text!,
-    }));
+    const mails = await fetchEmails(mailAPI, cacheDir);
+    return mails.map(parseMboxEmail);
   };
+
+  /**
+   * Fetch emails from given thread in the Pipermail archive
+   * Since Pipermail doesn't give an export API, nor an easily parseable HTML, I look for the same thread in HyperKitty
+   * @param url Pipermail URL (without https://) for getting the thread title
+   * @param month number of month 1-12
+   * @param year year
+   * @returns list of mails
+   */
+  const collectPipermailEmails = async (url: string, month: number, year: number): Promise<Email[]> => {
+    // first get the old pipermail page to get the title
+    const pipermailPage = await fetchHTMLParsed(url, cacheDir);
+    const title = pipermailPage.querySelector('h1')!.text.toLowerCase().replace('[numpy-discussion] ', '');
+    const endMonth = month === 12 ? 1 : month + 1;
+    const endYear = month === 12 ? year + 1 : year;
+    const intervalAPI = pythonMailIntervalURL('numpy-discussion',
+      year, month, 1,
+      endYear, endMonth, 1,
+      `${year}-${month}-${endYear}-${endMonth}`
+    );
+    const mails = await fetchEmails(intervalAPI, cacheDir);
+    return mails
+      .filter(m => m.subject?.toLowerCase().includes(title))
+      .map(parseMboxEmail);
+  }
 
   /**
    * Fetch comments from GitHub issue
@@ -103,6 +115,14 @@ const collectNEPComments = async (url: string, cacheDir: string): Promise<NEPCom
   let match = url.match(/^https:\/\/mail\.python\.org\/archives\/list\/numpy-discussion@python\.org\/thread\/([A-Z0-9]*)/);
   if(match)
     return await collectArchiveEmails(match[1]);
+  match = url.match(/^https:\/\/(mail\.python\.org\/pipermail\/numpy-discussion\/([0-9]*)-([A-Z][a-z]*).*)$/);
+  if(match)
+    // first argument is url without https, second is year (numeric), third is month (text)
+    return await collectPipermailEmails(
+      match[1],
+      new Date(`1 ${match[3]} 2000`).getMonth() + 1,
+      parseInt(match[2]),
+    );
   match = url.match(/^https:\/\/github\.com\/numpy\/numpy\/issues\/([0-9]*)/);
   if(match)
     return await collectGithubIssueComments(parseInt(match[1]));
