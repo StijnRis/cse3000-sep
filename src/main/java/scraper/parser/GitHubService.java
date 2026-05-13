@@ -7,7 +7,6 @@ import retrofit2.http.GET;
 import retrofit2.http.Path;
 
 import java.sql.Date;
-import java.time.Instant;
 
 public interface GitHubService {
 
@@ -17,11 +16,14 @@ public interface GitHubService {
     @GET("repos/{owner}/{repo}/issues/{pull_number}/comments")
     Call<ResponseBody> getPrConversations(@Path("owner") String owner, @Path("repo") String repo, @Path("pull_number") String pull_number);
 
+    @GET("/repos/{owner}/{repo}/pulls/{pull_number}/comments")
+    Call<ResponseBody> getPrComments(@Path("owner") String owner, @Path("repo") String repo, @Path("pull_number") String pull_number);
+
     @GET("/users/{username}")
     Call<ResponseBody> getUser(@Path("username") String username);
 
     @Getter
-    public static class PullRequest {
+    class PullRequest {
         String body;
         Date created_at;
         Date closed_at;
@@ -30,14 +32,22 @@ public interface GitHubService {
     }
 
     @Getter
-    public static class Conversation {
+    class ReviewComment {
+        String body;
+        Date created_at;
+        int line; //cursed way to find out what comments reply to each other
+        GitHubUser user;
+    }
+
+    @Getter
+    class Conversation {
         String body;
         Date created_at;
         GitHubUser user;
     }
 
     @Getter
-    public static class GitHubUser {
+    class GitHubUser {
         String login;
         String name;
         String email;

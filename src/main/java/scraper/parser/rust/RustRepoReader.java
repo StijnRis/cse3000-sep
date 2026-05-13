@@ -91,10 +91,12 @@ public class RustRepoReader {
                         pr.getBody()
                 );
                 commentIndex++;
-                comments.add(lastComment);
+                comments.add(prComment);
+
                 success++;
 
                 //Make sure in order.
+                Comment lastComment = prComment;
                 for (int i = 0; i < conversations.size(); i++) {
                     GitHubService.Conversation conv = conversations.get(i);
 
@@ -110,6 +112,23 @@ public class RustRepoReader {
                     lastComment = newComment;
                     success++;
                 }
+
+                List<GitHubService.ReviewComment> revComments = getReviewCommentsFromAPI(proposal);
+                HashMap<Integer, Comment> lastCommentAtLine = new HashMap<Integer, Comment>();
+                for(GitHubService.ReviewComment revComment : revComments) {
+                    Comment comment = new Comment(commentIndex,
+                            getOrCreateAuthor(revComment.getUser()),
+                            proposal,
+                            lastCommentAtLine.getOrDefault(revComment.getLine(), prComment),
+                            revComment.getCreated_at(),
+                            revComment.getBody()
+                    );
+                    commentIndex++;
+                    comments.add(comment);
+                    lastCommentAtLine.put(revComment.getLine(), comment);
+                    success++;
+                }
+
             } catch (Exception e) {
                 Log.log("GitHub Scraping: Could not get PR Page: " + proposal.getTopic());
                 e.printStackTrace();
@@ -252,6 +271,31 @@ public class RustRepoReader {
         Gson gson = new Gson().newBuilder().setDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'").create();
         JsonReader reader = new JsonReader(new FileReader(file));
         GitHubService.Conversation[] arr = gson.fromJson(reader, GitHubService.Conversation[].class);
+        return List.of(arr);
+    }
+
+    private List<GitHubService.ReviewComment> getReviewCommentsFromAPI(Proposal pr) throws IOException {
+        File cacheReviewComments = new File(cacheDir + "revc_" + pr.getId().getProposalId() + ".json");
+
+        if(!ignoreCached && cacheReviewComments.isFile()) {
+            Log.oLog("GitHub Scraping: Cache hit: " + cacheReviewComments.getName());
+            return parseReviewCommentsFromFile(cacheReviewComments);
+        }
+
+        if(rateLimit <= 0) {
+            Log.warn("GitHub Scraping: GitHub Rate Limit reached. Skipping Conversations for " + pr.getId().getProposalId());
+            throw new IOException("Rate Limit Reached");
+        }
+
+        writeCallToFile(cacheReviewComments, service.getPrComments("rust-lang", "rfcs", getPrNum(pr)));
+
+        return parseReviewCommentsFromFile(cacheReviewComments);
+    }
+
+    private List<GitHubService.ReviewComment> parseReviewCommentsFromFile(File file) throws FileNotFoundException {
+        Gson gson = new Gson().newBuilder().setDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'").create();
+        JsonReader reader = new JsonReader(new FileReader(file));
+        GitHubService.ReviewComment[] arr = gson.fromJson(reader, GitHubService.ReviewComment[].class);
         return List.of(arr);
     }
 
