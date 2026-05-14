@@ -436,6 +436,7 @@ export const dataSource = async (database: string): Promise<DataSource> => {
     database,
     entities: [ProjectSQL, PersonSQL, PersonUsernameSQL, ProposalSQL, ProposalRevisionSQL, StageHistorySQL, CommentSQL],
     synchronize: true,
+    dropSchema: true,
     // logging: true,
   });
   await db.initialize();
