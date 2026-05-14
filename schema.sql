@@ -87,7 +87,7 @@ CREATE TABLE RelatedProposal (
     proposal_id TEXT,
     related_project_id INTEGER,
     related_proposal_id TEXT,
-    type TEXT CHECK (type IN ('related', 'supersedes'))
+    type TEXT CHECK (type IN ('related', 'supersedes')),
     PRIMARY KEY (
         project_id,
         proposal_id,
