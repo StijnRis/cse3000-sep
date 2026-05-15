@@ -38,11 +38,15 @@ type JEPComment = {
   created: Date,
   content: string,
 };
-export type JEP = SEP<string, JEPType, JEPStatus, JEPComment> & {
+export type JEP = SEP <JEPType, JEPComment> & {
   issueID: number,
   owner?: OpenJDKUser,
+  authors: string[],
+  created: Date,
+  status: JEPStatus,
   release?: string,
   relatedIDs: number[],
+  content: string,
 };
 type JEPXML = {
   created: string,
