@@ -1,6 +1,5 @@
 package scraper.parser.rust;
 
-
 import com.google.gson.Gson;
 import com.google.gson.stream.JsonReader;
 import lombok.Getter;
@@ -211,73 +210,30 @@ public class RustRepoReader {
     private GitHubService.RawFile getFileFromAPI(String ref, String filePath) throws IOException {
         String[] pathSplit = filePath.split("/");
         String fileName = pathSplit[pathSplit.length - 1];
-        File possibleCache = new File(cacheDir + "file_" + ref + "_" + fileName + ".json");
+        File cache = new File(cacheDir + "file_" + ref + "_" + fileName + ".json");
 
-        if(!ignoreCached && possibleCache.isFile()) {
-            Log.oLog("GitHub Scraping: Cache hit: " + possibleCache.getName());
-            return parseFileFromFile(possibleCache);
-        }
-
-        if(rateLimit <= 0) {
-            Log.warn("GitHub Scraping: GitHub Rate Limit reached. Skipping commit " + ref);
-            throw new IOException("Rate Limit Reached");
-        }
-
-        writeCallToFile(possibleCache, service.getFile("rust-lang", "rfcs", filePath, ref));
-        return parseFileFromFile(possibleCache);
-    }
-
-    private GitHubService.RawFile parseFileFromFile(File file) throws FileNotFoundException {
-        Gson gson = new Gson();
-        JsonReader reader = new JsonReader(new FileReader(file));
-        return gson.fromJson(reader, GitHubService.RawFile.class);
+        return prepareData(cache,
+                GitHubService.RawFile.class,
+                service.getFile("rust-lang", "rfcs", filePath, ref)
+        );
     }
 
     private GitHubService.PRCommit getCommitFromAPI(String ref) throws IOException {
-        File possibleCache = new File(cacheDir + "commit_" + ref + ".json");
+        File cache = new File(cacheDir + "commit_" + ref + ".json");
 
-        if(!ignoreCached && possibleCache.isFile()) {
-            Log.oLog("GitHub Scraping: Cache hit: " + possibleCache.getName());
-            return parseCommitFromFile(possibleCache);
-        }
-
-        if(rateLimit <= 0) {
-            Log.warn("GitHub Scraping: GitHub Rate Limit reached. Skipping commit " + ref);
-            throw new IOException("Rate Limit Reached");
-        }
-
-        writeCallToFile(possibleCache, service.getCommit("rust-lang", "rfcs", ref));
-        return parseCommitFromFile(possibleCache);
-    }
-
-    private GitHubService.PRCommit parseCommitFromFile(File file) throws FileNotFoundException {
-        Gson gson = new Gson().newBuilder().setDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'").create();
-        JsonReader reader = new JsonReader(new FileReader(file));
-        return gson.fromJson(reader, GitHubService.PRCommit.class);
+        return prepareData(cache,
+                GitHubService.PRCommit.class,
+                service.getCommit("rust-lang", "rfcs", ref)
+        );
     }
 
     private List<GitHubService.PRCommit> getCommitListFromAPI(GitHubService.PullRequest pr) throws IOException {
-        File possibleCache = new File(cacheDir + "pr_commits_" + pr.getNumber() + ".json");
+        File cache = new File(cacheDir + "pr_commits_" + pr.getNumber() + ".json");
 
-        if(!ignoreCached && possibleCache.isFile()) {
-            Log.oLog("GitHub Scraping: Cache hit: " + possibleCache.getName());
-            return parseCommitListFromFile(possibleCache);
-        }
-
-        if(rateLimit <= 0) {
-            Log.warn("GitHub Scraping: GitHub Rate Limit reached. Skipping Conversations for " + pr.getNumber());
-            throw new IOException("Rate Limit Reached");
-        }
-
-        writeCallToFile(possibleCache, service.getPrCommits("rust-lang", "rfcs", String.valueOf(pr.getNumber())));
-        return parseCommitListFromFile(possibleCache);
-    }
-
-    private List<GitHubService.PRCommit> parseCommitListFromFile(File file) throws FileNotFoundException {
-        Gson gson = new Gson().newBuilder().setDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'").create();
-        JsonReader reader = new JsonReader(new FileReader(file));
-        GitHubService.PRCommit[] arr = gson.fromJson(reader, GitHubService.PRCommit[].class);
-        return List.of(arr);
+        return List.of(prepareData(cache,
+                GitHubService.PRCommit[].class,
+                service.getPrCommits("rust-lang", "rfcs", String.valueOf(pr.getNumber()))
+        ));
     }
 
     private Person getOrCreateAuthor(GitHubService.GitHubUser user) throws IOException {
@@ -333,29 +289,6 @@ public class RustRepoReader {
         return aff.get();
     }
 
-    private GitHubService.GitHubUser getFullUserFromAPI(GitHubService.GitHubUser user) throws IOException {
-        File possibleCache = new File(cacheDir + "gh_user_" + user.getLogin() + ".json");
-
-        if(!ignoreCached && possibleCache.isFile()) {
-            Log.oLog("GitHub Scraping: Cache hit: " + possibleCache.getName());
-            return parseUserFromFile(possibleCache);
-        }
-
-        if(rateLimit <= 0) {
-            Log.warn("GitHub Scraping: GitHub Rate Limit reached. Skipping GH User " + user.getLogin());
-            throw new IOException("Rate Limit Reached");
-        }
-
-        writeCallToFile(possibleCache, service.getUser(user.getLogin()));
-        return parseUserFromFile(possibleCache);
-    }
-
-    private GitHubService.GitHubUser parseUserFromFile(File file) throws FileNotFoundException {
-        Gson gson = new Gson();
-        JsonReader reader = new JsonReader(new FileReader(file));
-        return gson.fromJson(reader, GitHubService.GitHubUser.class);
-    }
-
     private void createStageHistory(GitHubService.PullRequest pr, Proposal proposal) {
         StageHistory.create(session, proposal, 0, "created", pr.getCreated_at());
 
@@ -366,76 +299,31 @@ public class RustRepoReader {
         }
     }
 
-    private GitHubService.PullRequest getPullRequestFromAPI(Proposal pr) throws IOException {
-        File possibleCache = new File(cacheDir + "pr_" + pr.getId().getProposalId() + ".json");
+    private GitHubService.GitHubUser getFullUserFromAPI(GitHubService.GitHubUser user) throws IOException {
+        File cache = new File(cacheDir + "gh_user_" + user.getLogin() + ".json");
 
-        if(!ignoreCached && possibleCache.isFile()) {
-            Log.oLog("GitHub Scraping: Cache hit: " + possibleCache.getName());
-            return parsePrFromFile(possibleCache);
-        }
-
-        if(rateLimit <= 0) {
-            Log.warn("GitHub Scraping: GitHub Rate Limit reached. Skipping PR " + pr.getId().getProposalId());
-            throw new IOException("Rate Limit Reached");
-        }
-
-        writeCallToFile(possibleCache, service.getPr("rust-lang", "rfcs", String.valueOf(pr.getPullRequest().getNumber())));
-        return parsePrFromFile(possibleCache);
-    }
-
-    private GitHubService.PullRequest parsePrFromFile(File file) throws FileNotFoundException {
-        Gson gson = new Gson().newBuilder().setDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'").create();
-        JsonReader reader = new JsonReader(new FileReader(file));
-        return gson.fromJson(reader, GitHubService.PullRequest.class);
+        return prepareData(cache,
+                GitHubService.GitHubUser.class,
+                service.getUser(user.getLogin())
+        );
     }
 
     private List<GitHubService.Conversation> getConversationFromAPI(GitHubService.PullRequest pr) throws IOException {
-        File possibleCache = new File(cacheDir + "conv_" + pr.getNumber() + ".json");
+        File cache = new File(cacheDir + "conv_" + pr.getNumber() + ".json");
 
-        if(!ignoreCached && possibleCache.isFile()) {
-            Log.oLog("GitHub Scraping: Cache hit: " + possibleCache.getName());
-            return parseConservationsFromFile(possibleCache);
-        }
-
-        if(rateLimit <= 0) {
-            Log.warn("GitHub Scraping: GitHub Rate Limit reached. Skipping Conversations for " + pr.getNumber());
-            throw new IOException("Rate Limit Reached");
-        }
-
-        writeCallToFile(possibleCache, service.getPrConversations("rust-lang", "rfcs", String.valueOf(pr.getNumber())));
-        return parseConservationsFromFile(possibleCache);
-    }
-
-    private List<GitHubService.Conversation> parseConservationsFromFile(File file) throws FileNotFoundException {
-        Gson gson = new Gson().newBuilder().setDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'").create();
-        JsonReader reader = new JsonReader(new FileReader(file));
-        GitHubService.Conversation[] arr = gson.fromJson(reader, GitHubService.Conversation[].class);
-        return List.of(arr);
+        return List.of(prepareData(cache,
+                GitHubService.Conversation[].class,
+                service.getPrConversations("rust-lang", "rfcs", String.valueOf(pr.getNumber()))
+        ));
     }
 
     private List<GitHubService.ReviewComment> getReviewCommentsFromAPI(GitHubService.PullRequest pr) throws IOException {
-        File cacheReviewComments = new File(cacheDir + "revc_" + pr.getNumber() + ".json");
+        File cache = new File(cacheDir + "revc_" + pr.getNumber() + ".json");
 
-        if(!ignoreCached && cacheReviewComments.isFile()) {
-            Log.oLog("GitHub Scraping: Cache hit: " + cacheReviewComments.getName());
-            return parseReviewCommentsFromFile(cacheReviewComments);
-        }
-
-        if(rateLimit <= 0) {
-            Log.warn("GitHub Scraping: GitHub Rate Limit reached. Skipping Conversations for " + pr.getNumber());
-            throw new IOException("Rate Limit Reached");
-        }
-
-        writeCallToFile(cacheReviewComments, service.getPrComments("rust-lang", "rfcs", String.valueOf(pr.getNumber())));
-
-        return parseReviewCommentsFromFile(cacheReviewComments);
-    }
-
-    private List<GitHubService.ReviewComment> parseReviewCommentsFromFile(File file) throws FileNotFoundException {
-        Gson gson = new Gson().newBuilder().setDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'").create();
-        JsonReader reader = new JsonReader(new FileReader(file));
-        GitHubService.ReviewComment[] arr = gson.fromJson(reader, GitHubService.ReviewComment[].class);
-        return List.of(arr);
+        return List.of(prepareData(cache,
+                GitHubService.ReviewComment[].class,
+                service.getPrComments("rust-lang", "rfcs", String.valueOf(pr.getNumber()))
+        ));
     }
 
     private List<GitHubService.PullRequest> getPullRequestsFromAPI() throws IOException {
@@ -469,21 +357,40 @@ public class RustRepoReader {
 
     private List<GitHubService.PullRequest> compilePRSubCaches() throws IOException {
         List<GitHubService.PullRequest> arr = new ArrayList<>();
-        Gson gson = new Gson().newBuilder().setDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'").create();
 
         int subIndex = 0;
         File prIndexSubCache = new File(cacheDir + "_prIndex_" + subIndex + ".json");
 
         while(prIndexSubCache.isFile()) {
             Log.oLog("GitHub Scraping: Compiling subcache, at file " + prIndexSubCache.getName());
-            JsonReader reader = new JsonReader(new FileReader(prIndexSubCache));
-            arr.addAll(List.of(gson.fromJson(reader, GitHubService.PullRequest[].class)));
+            arr.addAll(List.of(readFromFile(prIndexSubCache, GitHubService.PullRequest[].class)));
 
             subIndex++;
             prIndexSubCache = new File(cacheDir + "_prIndex_" + subIndex + ".json");
         }
 
         return arr;
+    }
+
+    private <T> T prepareData(File cacheFile, Type type, Call<ResponseBody> call) throws IOException {
+        if(!ignoreCached && cacheFile.isFile()) {
+            Log.oLog("GitHub Scraping: Cache hit: " + cacheFile.getName());
+            return readFromFile(cacheFile, type);
+        }
+
+        if(rateLimit <= 0) {
+            Log.warn("GitHub Scraping: GitHub Rate Limit reached. Skipping " + call.request().url());
+            throw new IOException("Rate Limit Reached");
+        }
+
+        writeCallToFile(cacheFile, call);
+        return readFromFile(cacheFile, type);
+    }
+
+    private <T> T readFromFile(File file, Type type) throws FileNotFoundException {
+        Gson gson = new Gson().newBuilder().setDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'").create();
+        JsonReader reader = new JsonReader(new FileReader(file));
+        return (T) gson.fromJson(reader, type);
     }
 
     private Headers writeCallToFile(File file, Call<ResponseBody> call) throws IOException {

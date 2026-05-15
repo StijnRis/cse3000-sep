@@ -123,17 +123,28 @@ public class RustScraper {
     }
 
     private static <T> void persistAll(Session s, List<T> objects) {
-        Transaction tx = s.beginTransaction();
+        //Many transactions preferred over a single one
+        //Might take longer, but ensures the program does not fail if a single proposal is faulty.
         for (int i = 0; i < objects.size(); i++) {
-            s.persist(objects.get(i));
+            try {
+                Log.oLog("DB: Persisting objects (%d/%d): %s".formatted(i, objects.size(), objects.get(i)));
+                Transaction tx = s.beginTransaction();
+                s.persist(objects.get(i));
+                tx.commit();
+            } catch(Exception e) {
+                Log.warn("Could not persist object: " + objects.get(i));
+            }
         }
-        tx.commit();
     }
 
     private static void persistOne(Session s, Object object) {
-        Transaction tx = s.beginTransaction();
-        s.persist(object);
-        tx.commit();
+        try {
+            Transaction tx = s.beginTransaction();
+            s.persist(object);
+            tx.commit();
+        } catch(Exception e) {
+            Log.warn("Could not persist object: " + object);
+        }
     }
 
     private static void clearOldData(String dbPath) {
