@@ -39,7 +39,7 @@ public class ArgumentHandler {
     }
 
     public static void validateOptions(Map<String, String> arguments) throws IllegalArgumentException {
-        arguments.forEach((arg, value) -> {
+        arguments.forEach((arg, _) -> {
             if(Arrays.stream(validOptions).noneMatch(opt -> Objects.equals(opt, arg))) {
                 throw new IllegalArgumentException("Unknown argument option: " + arg);
             }

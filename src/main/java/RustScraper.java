@@ -49,30 +49,41 @@ public class RustScraper {
         db2 = new HibernateUtil(dbPath);
         Session s = db2.getSession();
 
+        Project project = new Project(5, "Rust", "RFC", "MIT or Apache-2.0");
+
+        //Project must already persist in database due to autogeneration of index and dependency on this.
+        persistOne(s, project); //Generate internal ids for proposals, otherwise PK violation below.
+
         if(arguments.get("project").equals("rust")) {
             if(arguments.containsKey("remote")) {
+                scrapeGitHubPRs(s, project, cacheFolder);
+
                 Log.log("Pulling latest changes from GitHub");
                 downloadRustRepository(gitRootFolder);
             }
 
-            scrapeLocalFiles(s, gitRootFolder);
 
             //Scrape online PRs and Discussions only if remote, otherwise use cached pages
             //This requires the above to link to proper proposals (PR urls in .md files)
             if(arguments.containsKey("remote")) {
-                scrapeGitHubPRs(s, cacheFolder);
+                scrapeGitFiles(s, project, gitRootFolder);
             }
         }
 
         s.close();
+        Log.log("Exiting");
     }
 
-    private static void scrapeGitHubPRs(Session s, String cacheFolder) {
+    private static void scrapeGitHubPRs(Session s, Project project, String cacheFolder) {
+        Log.log("RustRepoReader: Begin building");
         try {
-            rr = new RustRepoReader(s, arguments.get("token"), cacheFolder, false, dr.getProposals(), dr.getAuthorIndex());
+            rr = new RustRepoReader(s, arguments.get("token"), cacheFolder, false, project,5000000); //dr.getProposals(), dr.getAuthorIndex());
 
             rr.scrapeGitHubData();
 
+            Log.log("DB: Persisting Proposals");
+            persistAll(s, rr.getProposals());
+            Log.log("DB: Persisting Comments");
             persistAll(s, rr.getComments());
         } catch (Exception e) {
             Log.error("Failed reading data from GitHub: " + e);
@@ -94,19 +105,16 @@ public class RustScraper {
         }
     }
 
-    private static void scrapeLocalFiles(Session s, String rootFolder) {
-        Project project = new Project(5, "Rust", "RFC", "MIT or Apache-2.0");
-
-        //Project must already persist in database due to autogeneration of index and dependency on this.
-        persistOne(s, project); //Generate internal ids for proposals, otherwise PK violation below.
-
+    private static void scrapeGitFiles(Session s, Project project, String rootFolder) {
+        Log.log("RustDataReader: Begin building");
         try {
-            dr = new RustDataReader(s, project, rootFolder);
+            dr = new RustDataReader(s, project, rr, rootFolder, rr.getProposals());
 
             dr.readProjectMarkdownFiles();
 
-            persistAll(s, dr.getProposals());//Generate internal ids for proposals, otherwise PK violation below.
+            Log.log("DB: Persisting Proposal Revisions");
             persistAll(s, dr.getProposalRevisions());
+            Log.log("DB: Persisting Revision Authors");
             persistAll(s, dr.getRevisionAuthors());
         } catch (Exception e) {
             Log.error("Failed reading data from rust project: " + e);
