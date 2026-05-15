@@ -3,6 +3,7 @@ plugins {
     id("io.freefair.lombok") version "9.5.0"
     id 'application'
     id 'jacoco'
+    id("com.github.jk1.dependency-license-report") version "3.1.2"
 }
 
 version = '1.0-SNAPSHOT'
