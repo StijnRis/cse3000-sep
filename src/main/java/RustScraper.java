@@ -32,13 +32,7 @@ public class RustScraper {
         }
 
         //File path setup
-        String rootFolder = "";
-        if(arguments.containsKey("local")) {
-            rootFolder = arguments.get("local");
-        } else if(arguments.containsKey("remote")) {
-            rootFolder = arguments.get("remote");
-        }
-
+        String rootFolder = arguments.get("local");
         String gitRootFolder = rootFolder + "rfcs/";
         String cacheFolder = rootFolder + "cache/";
         String dbPath = rootFolder + "dataset.sqlite";
@@ -55,19 +49,11 @@ public class RustScraper {
         persistOne(s, project); //Generate internal ids for proposals, otherwise PK violation below.
 
         if(arguments.get("project").equals("rust")) {
-            if(arguments.containsKey("remote")) {
-                scrapeGitHubPRs(s, project, cacheFolder);
+            scrapeGitHubPRs(s, project, cacheFolder);
 
-                Log.log("Pulling latest changes from GitHub");
-                downloadRustRepository(gitRootFolder);
-            }
-
-
-            //Scrape online PRs and Discussions only if remote, otherwise use cached pages
-            //This requires the above to link to proper proposals (PR urls in .md files)
-            if(arguments.containsKey("remote")) {
-                scrapeGitFiles(s, project, gitRootFolder);
-            }
+            Log.log("Pulling latest changes from GitHub");
+            downloadRustRepository(gitRootFolder);
+            scrapeGitFiles(s, project, gitRootFolder);
         }
 
         s.close();
@@ -77,7 +63,9 @@ public class RustScraper {
     private static void scrapeGitHubPRs(Session s, Project project, String cacheFolder) {
         Log.log("RustRepoReader: Begin building");
         try {
-            rr = new RustRepoReader(s, arguments.get("token"), cacheFolder, false, project,5000000); //dr.getProposals(), dr.getAuthorIndex());
+            rr = new RustRepoReader(s, arguments.get("token"), cacheFolder,
+                    Boolean.parseBoolean(arguments.getOrDefault("ignorecache", "false")),
+                    project,5000000);
 
             rr.scrapeGitHubData();
 
