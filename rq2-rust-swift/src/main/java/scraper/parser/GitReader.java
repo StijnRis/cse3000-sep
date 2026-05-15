@@ -1,5 +1,6 @@
 package scraper.parser;
 
+import lombok.Getter;
 import org.eclipse.jgit.lib.ObjectId;
 import org.eclipse.jgit.lib.ObjectLoader;
 import org.eclipse.jgit.lib.Repository;
@@ -11,7 +12,6 @@ import org.eclipse.jgit.treewalk.filter.PathFilter;
 import util.Log;
 import util.LogFollowCommand;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -23,28 +23,28 @@ public class GitReader {
     private Repository repo;
     private LogFollowCommand lfc;
 
+    @Getter
+    private String lastPath;
+
     /**
      * Build a GitReader to explore the history of a file
-     * @param rootDirPath Git Root
-     * @param filePath File to get all commits for
+     * @param repo Git Repo
+     * @param startCommitHash Last Commit in the PR
      */
-    public GitReader(String rootDirPath, String filePath) throws IOException {
-        builder = new FileRepositoryBuilder();
-        repo = builder.setGitDir(new File(rootDirPath + ".git/"))
-                .readEnvironment()
-                .findGitDir()
-                .build();
-        lfc = new LogFollowCommand(repo, filePath);
+    public GitReader(Repository repo, String startCommitHash) throws IOException {
+        this.repo = repo;
+        lfc = new LogFollowCommand(repo, startCommitHash);
     }
 
     /**
      * @return List of all commits for the file specified during creation
      */
-    public List<RevCommit> readProjectGit() throws Exception {
+    public List<RevCommit> readProjectGitInternal() throws Exception {
         Log.log("RFC Parsing - GitReader: Started");
 
         ArrayList<RevCommit> proposals = new ArrayList<>();
         proposals.addAll(lfc.call());
+        lastPath = lfc.getLastPath();
 
         return proposals;
     }

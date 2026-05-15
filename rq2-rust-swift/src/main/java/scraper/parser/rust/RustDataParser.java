@@ -2,6 +2,7 @@ package scraper.parser.rust;
 
 import lombok.Getter;
 import org.eclipse.jgit.lib.PersonIdent;
+import org.eclipse.jgit.lib.Repository;
 import org.eclipse.jgit.revwalk.RevCommit;
 import org.hibernate.Session;
 import scraper.data.Project;
@@ -24,10 +25,10 @@ import java.util.stream.Collectors;
 
 public class RustDataParser {
 
-    private Session session;
-    private Project project;
-    private Proposal proposal;
-    private GitReader gitReader;
+    private final Session session;
+    private final Project project;
+    private final Proposal proposal;
+    private final GitReader gitReader;
     private String fileName;
 
     //Result storage
@@ -38,22 +39,23 @@ public class RustDataParser {
 
     public int authorIndex;
 
-    public RustDataParser(Session session, Project project, Proposal proposal, String rootDirPath, String path, int authorIndex) throws IOException {
+    public RustDataParser(Session session, Repository repository, Project project, Proposal proposal, String rootDirPath, String startCommitHash, int authorIndex) throws IOException {
         this.session = session;
         this.project = project;
         this.proposal = proposal;
-        this.gitReader = new GitReader(rootDirPath, path);
-
-        String[] pathSplit = path.split("/");
-        this.fileName = pathSplit[pathSplit.length - 1];
         this.authorIndex = authorIndex;
+
+        this.gitReader = new GitReader(repository, startCommitHash); //todo efd2744b82ef44ce5359a293f346e4ba0a1a83c7
     }
 
     /**
      * Creates a list of all proposal revisions, treating every commit to the file history as a separate revision.
      */
     public List<ProposalRevision> createRevisionHistory() throws Exception {
-        List<RevCommit> commits = gitReader.readProjectGit();
+        List<RevCommit> commits = gitReader.readProjectGitInternal();
+
+        String[] pathSplit = gitReader.getLastPath().split("/");
+        fileName = pathSplit[pathSplit.length - 1];
 
         for (int i = 0; i < commits.size(); i++) {
             RevCommit commit = commits.get(i);

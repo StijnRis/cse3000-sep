@@ -32,13 +32,7 @@ public class RustScraper {
         }
 
         //File path setup
-        String rootFolder = "";
-        if(arguments.containsKey("local")) {
-            rootFolder = arguments.get("local");
-        } else if(arguments.containsKey("remote")) {
-            rootFolder = arguments.get("remote");
-        }
-
+        String rootFolder = arguments.get("local");
         String gitRootFolder = rootFolder + "rfcs/";
         String cacheFolder = rootFolder + "cache/";
         String dbPath = rootFolder + "dataset.sqlite";
@@ -49,30 +43,35 @@ public class RustScraper {
         db2 = new HibernateUtil(dbPath);
         Session s = db2.getSession();
 
+        Project project = new Project(5, "Rust", "RFC", "MIT or Apache-2.0");
+
+        //Project must already persist in database due to autogeneration of index and dependency on this.
+        persistOne(s, project); //Generate internal ids for proposals, otherwise PK violation below.
+
         if(arguments.get("project").equals("rust")) {
-            if(arguments.containsKey("remote")) {
-                Log.log("Pulling latest changes from GitHub");
-                downloadRustRepository(gitRootFolder);
-            }
+            scrapeGitHubPRs(s, project, cacheFolder);
 
-            scrapeLocalFiles(s, gitRootFolder);
-
-            //Scrape online PRs and Discussions only if remote, otherwise use cached pages
-            //This requires the above to link to proper proposals (PR urls in .md files)
-            if(arguments.containsKey("remote")) {
-                scrapeGitHubPRs(s, cacheFolder);
-            }
+            Log.log("Pulling latest changes from GitHub");
+            downloadRustRepository(gitRootFolder);
+            scrapeGitFiles(s, project, gitRootFolder);
         }
 
         s.close();
+        Log.log("Exiting");
     }
 
-    private static void scrapeGitHubPRs(Session s, String cacheFolder) {
+    private static void scrapeGitHubPRs(Session s, Project project, String cacheFolder) {
+        Log.log("RustRepoReader: Begin building");
         try {
-            rr = new RustRepoReader(s, arguments.get("token"), cacheFolder, false, dr.getProposals(), dr.getAuthorIndex());
+            rr = new RustRepoReader(s, arguments.get("token"), cacheFolder,
+                    Boolean.parseBoolean(arguments.getOrDefault("ignorecache", "false")),
+                    project,5000000);
 
             rr.scrapeGitHubData();
 
+            Log.log("DB: Persisting Proposals");
+            persistAll(s, rr.getProposals());
+            Log.log("DB: Persisting Comments");
             persistAll(s, rr.getComments());
         } catch (Exception e) {
             Log.error("Failed reading data from GitHub: " + e);
@@ -94,19 +93,16 @@ public class RustScraper {
         }
     }
 
-    private static void scrapeLocalFiles(Session s, String rootFolder) {
-        Project project = new Project(5, "Rust", "RFC", "MIT or Apache-2.0");
-
-        //Project must already persist in database due to autogeneration of index and dependency on this.
-        persistOne(s, project); //Generate internal ids for proposals, otherwise PK violation below.
-
+    private static void scrapeGitFiles(Session s, Project project, String rootFolder) {
+        Log.log("RustDataReader: Begin building");
         try {
-            dr = new RustDataReader(s, project, rootFolder);
+            dr = new RustDataReader(s, project, rr, rootFolder, rr.getProposals());
 
             dr.readProjectMarkdownFiles();
 
-            persistAll(s, dr.getProposals());//Generate internal ids for proposals, otherwise PK violation below.
+            Log.log("DB: Persisting Proposal Revisions");
             persistAll(s, dr.getProposalRevisions());
+            Log.log("DB: Persisting Revision Authors");
             persistAll(s, dr.getRevisionAuthors());
         } catch (Exception e) {
             Log.error("Failed reading data from rust project: " + e);
@@ -115,17 +111,28 @@ public class RustScraper {
     }
 
     private static <T> void persistAll(Session s, List<T> objects) {
-        Transaction tx = s.beginTransaction();
+        //Many transactions preferred over a single one
+        //Might take longer, but ensures the program does not fail if a single proposal is faulty.
         for (int i = 0; i < objects.size(); i++) {
-            s.persist(objects.get(i));
+            try {
+                Log.oLog("DB: Persisting objects (%d/%d): %s".formatted(i, objects.size(), objects.get(i)));
+                Transaction tx = s.beginTransaction();
+                s.persist(objects.get(i));
+                tx.commit();
+            } catch(Exception e) {
+                Log.warn("Could not persist object: " + objects.get(i));
+            }
         }
-        tx.commit();
     }
 
     private static void persistOne(Session s, Object object) {
-        Transaction tx = s.beginTransaction();
-        s.persist(object);
-        tx.commit();
+        try {
+            Transaction tx = s.beginTransaction();
+            s.persist(object);
+            tx.commit();
+        } catch(Exception e) {
+            Log.warn("Could not persist object: " + object);
+        }
     }
 
     private static void clearOldData(String dbPath) {

@@ -5,13 +5,13 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.Session;
+import org.hibernate.Transaction;
 import org.hibernate.annotations.OnDelete;
 import org.hibernate.annotations.OnDeleteAction;
 import scraper.data.Project;
 import scraper.data.author.Person;
-
-import java.net.URL;
-import java.util.List;
+import scraper.parser.GitHubService;
 
 @Getter
 @Setter
@@ -43,8 +43,20 @@ public class Proposal {
     private String proposalType;
 
     @Transient
-    private List<String> rfcPrs;
+    private GitHubService.PullRequest pullRequest;
 
     @Transient
-    private List<String> trackingIssues;
+    private String lastCommitHash;
+
+    public static Proposal create(Session session, Project project, String proposalId, Person proposer, String topic, String proposalType, GitHubService.PullRequest pullRequest, String lastCommitHash) {
+        ProposalId pId = new ProposalId(project.getId(), proposalId);
+
+        Proposal proposal = new Proposal(pId, project, proposer, topic, proposalType, pullRequest, lastCommitHash);
+
+        Transaction tx = session.beginTransaction();
+        session.persist(proposal);
+        tx.commit();
+
+        return proposal;
+    }
 }

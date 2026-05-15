@@ -6,7 +6,7 @@ import java.util.Objects;
 
 public class ArgumentHandler {
 
-    public static String[] validOptions = new String[]{"local", "remote", "project", "token"};
+    public static String[] validOptions = new String[]{"local", "ignorecache", "project", "token"};
     public static String[] validProjects = new String[]{"rust", "swift"};
 
     public static Map<String, String> parseArgs(String[] args) throws IllegalArgumentException {
@@ -39,7 +39,7 @@ public class ArgumentHandler {
     }
 
     public static void validateOptions(Map<String, String> arguments) throws IllegalArgumentException {
-        arguments.forEach((arg, value) -> {
+        arguments.forEach((arg, _) -> {
             if(Arrays.stream(validOptions).noneMatch(opt -> Objects.equals(opt, arg))) {
                 throw new IllegalArgumentException("Unknown argument option: " + arg);
             }
@@ -54,7 +54,7 @@ public class ArgumentHandler {
         } else if(hasLocal) {
             validateLocal(arguments.get("local"));
         } else if(hasRemote) {
-            validateRemote(arguments.get("remote"));
+            validateIgnoreCache(arguments.get("ignorecache"));
         } else {
             throw new IllegalArgumentException("Missing either local or remote path");
         }
@@ -73,19 +73,20 @@ public class ArgumentHandler {
     private static void validateLocal(String value) throws IllegalArgumentException {
         File rootDir = new File(value);
 
-        if(!rootDir.exists() || !rootDir.isDirectory()) {
-            throw new IllegalArgumentException("Provided path is not an existing directory.");
+        if(!rootDir.exists() && rootDir.isFile()) {
+            throw new IllegalArgumentException("Provided path is an existing file.");
         }
 
         if(!value.endsWith("/")) {
             throw new IllegalArgumentException("Path must end with / for internal reasons.");
         }
+
+        rootDir.mkdirs();
     }
 
-    private static void validateRemote(String value) {
-        if(!value.endsWith("/")) {
-            throw new IllegalArgumentException("Path must end with / for internal reasons.");
+    private static void validateIgnoreCache(String value) {
+        if(!value.equals("true") && !value.equals("false")) {
+            throw new IllegalArgumentException("Ignore Cache must be true or false");
         }
-        //TODO
     }
 }
