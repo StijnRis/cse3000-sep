@@ -106,7 +106,7 @@ class StageHistorySQL {
 };
 
 @Entity('RelatedProposal')
-class RelatedProposalSQL {
+export class RelatedProposalSQL {
   @PrimaryColumn({type: 'integer'})
   project_id: number;
   @PrimaryColumn({type: 'text'})
@@ -177,12 +177,11 @@ class Database {
   comment = new Map<number/*comment_id*/, CommentSQL>();
 }
 
-const realNameDomain = 'real_name';
-const emailDomain = 'email';
-const githubDomain = 'github.com';
-const openjdkDomain = 'openjdk.org';
+export const realNameDomain = 'real_name';
+export const emailDomain = 'email';
+export const githubDomain = 'github.com';
 
-abstract class Persister<SEP_T> {
+export abstract class Persister<SEP_T> {
   abstract project: ProjectSQL;
 
   db = new Database();
@@ -238,243 +237,6 @@ abstract class Persister<SEP_T> {
     // then fill SEPs
     this.persistSEPs(seps);
     return this.db;
-  }
-}
-
-export class JEPPersister extends Persister<JEP> {
-  project = {
-    project_id: 6,
-    project_name: 'OpenJDK',
-    enhancement_proposal_name: 'JEP',
-    copyright: 'GPLv2',
-  };
-
-  normalizeStatus(status: JEP['status']): StageHistorySQL['normalised_status'] {
-    return status ? (({
-      'Draft': 'draft',
-      'Posted': 'review',
-      'Submitted': 'review',
-      'Candidate': 'review',
-      'Funded': 'review',
-      'Completed': 'accepted',
-      'Withdrawn': 'withdrawn',
-      'Rejected': 'rejected',
-      'Active': 'active',
-      'Closed / Delivered': 'accepted',
-      'Closed / Withdrawn': 'withdrawn',
-      'Proposed to Target': 'accepted',
-      'Integrated': 'accepted',
-      'Targeted': 'review',
-    } as const)[status] || 'unknown') : 'unknown';
-  }
-
-  persistPeople(jeps: JEP[]) {
-    for(const jep of jeps) {
-      if(jep.owner) this.addPerson(jep.owner.username, jep.owner.name, openjdkDomain);
-      for(const author of jep.authors) this.addPerson(author, author, realNameDomain); //authors are only listed by name
-      for(const comment of jep.comments) this.addPerson(comment.author.username, comment.author.name, openjdkDomain);
-    }
-  }
-  persistSEPs(jeps: JEP[]) {
-    const byFinal = groupByFinalID(jeps);
-    for(const [fid, group] of byFinal) {
-      const id = `${fid}`;
-      const final = group[group.length - 1];
-      const proposal: ProposalSQL = {
-        project_id: this.projID(),
-        project: this.project,
-        proposal_id: id,
-        // proposer_id: final.owner ? this.usernameToID.get([openjdkDomain, final.owner.username]) : undefined,
-        proposal_type: final.type,
-      };
-      this.db.proposal.set(`${this.projID()} ${id}`, proposal);
-      group.forEach((jep, idx) => {
-        const revisionKey = `${this.projID()} ${id} ${idx}`;
-        const allAuthorIDs = new Set(jep.authors
-            .map(name => this.usernameToID.get(`${realNameDomain} ${name}`)!));
-        this.db.proposal_revision.set(revisionKey, {
-          project_id: proposal.project_id,
-          proposal_id: proposal.proposal_id,
-          proposal,
-          revision_index: idx,
-          title: jep.title,
-          created_at: jep.created.toISOString(),
-          content: jep.content,
-          implemented_at_version: jep.release,
-          authors: allAuthorIDs.keys().toArray().map(id => this.db.person.get(id)!),
-        });
-        // for(const author of jep.authors) {
-        //   this.db.proposal_revision_author.push({
-        //     project_id: this.projID(),
-        //     proposal_id: id,
-        //     revision_index: idx,
-        //     author_id: this.usernameToID.get([realNameDomain, author])!,
-        //   });
-        // }
-        // TODO rework JEP stage history logic
-        this.db.stage_history.set(revisionKey, {
-          project_id: proposal.project_id,
-          proposal_id: proposal.proposal_id,
-          proposal,
-          stage_index: idx,
-          normalised_status: this.normalizeStatus(jep.status),
-          raw_status: jep.status,
-          created_at: jep.created.toISOString(),
-        });
-        for(const comment of jep.comments) {
-          const newID = this.generateNumID(this.db.comment.size);
-          const author = this.db.person.get(this.usernameToID.get(`${openjdkDomain} ${comment.author.username}`)!)!;
-          this.db.comment.set(newID, {
-            comment_id: newID,
-            author_id: author.person_id,
-            author,
-            project_id: proposal.project_id,
-            proposal_id: proposal.proposal_id,
-            proposal,
-            created_at: comment.created.toISOString(),
-            content: comment.content,
-          });
-        }
-      });
-    }
-  }
-}
-
-export class NEPPersister extends Persister<NEP> {
-  project = {
-    project_id: 2,
-    project_name: 'NumPy',
-    enhancement_proposal_name: 'NEP',
-    copyright: 'Public Domain',
-  };
-
-  normalizeStatus(status: NEPRevision['status']): StageHistorySQL["normalised_status"] {
-    return status ? ({
-      'Draft': 'review',
-      'Active': 'active',
-      'Accepted': 'accepted',
-      'Deferred': 'withdrawn',
-      'Rejected': 'rejected',
-      'Withdrawn': 'withdrawn',
-      'Final': 'accepted',
-      'Superseded': 'superseded',
-      'Provisional': 'provisional',
-    } as const)[status] : 'unknown';
-  }
-
-  persistPeople(neps: NEP[]) {
-    for(const nep of neps) {
-      for(const rev of nep.revisions)
-        for(const author of rev.authors) {
-          if(author.email === undefined) this.addPerson(author.name, author.name, realNameDomain);
-          else this.addPerson(author.email, author.name, emailDomain);
-        }
-      for(const comment of nep.comments) {
-        if(isGithubComment(comment)) this.addPerson(comment.author.login, comment.author.name, githubDomain);
-        else this.addPerson(comment.author.email, comment.author.name, emailDomain);
-      }
-    }
-  }
-  persistSEPs(neps: NEP[]) {
-    // first need to generate IDs so that they can be referenced by replies
-    const commentToID = new Map<number | string, number>();
-    for(const nep of neps) {
-      for(const comm of nep.comments) {
-        if(!commentToID.has(comm.id)) {
-          const newID = this.generateNumID(commentToID.size);
-          commentToID.set(comm.id, newID);
-        }
-      }
-    }
-
-    // const byFinal = groupByFinalID(neps);
-    for(const nep of neps) {
-      const id = `${nep.id}`;
-      const proposal: ProposalSQL = {
-        project_id: this.projID(),
-        project: this.project,
-        proposal_id: id,
-        proposal_type: nep.type,
-      };
-      this.db.proposal.set(`${this.projID()} ${id}`, proposal);
-
-      let stage_index = 0; // increment only when status actually changes from one revision to the next
-      nep.revisions
-        // index ordered by creation date ascending
-        .toSorted(({created: d1}, {created: d2}) => d1.getTime() - d2.getTime())
-        .forEach((rev, i, revs) => {
-          const revisionKey = `${this.projID()} ${id} ${i}`;
-          const allAuthorIDs = rev.authors
-            .map(author => this.usernameToID.get(author.email === undefined
-              ? `${realNameDomain} ${author.name}`
-              : `${emailDomain} ${author.email}`)!);
-          this.db.proposal_revision.set(revisionKey, {
-            project_id: proposal.project_id,
-            proposal_id: proposal.proposal_id,
-            proposal,
-            revision_index: i,
-            title: nep.title,
-            created_at: rev.created.toISOString(),
-            content: rev.content,
-            authors: allAuthorIDs.map(id => this.db.person.get(id)!),
-          });
-          // for(const author of nep.authors) {
-          //   this.db.proposal_revision_author.push({
-          //     project_id: this.projID(),
-          //     proposal_id: id,
-          //     revision_index: idx,
-          //     author_id: ,
-          //   });
-          // }
-          if(i === 0 || rev.status !== revs[i-1].status) {
-            this.db.stage_history.set(revisionKey, {
-              project_id: proposal.project_id,
-              proposal_id: proposal.proposal_id,
-              proposal,
-              stage_index,
-              normalised_status: this.normalizeStatus(rev.status),
-              raw_status: rev.status,
-              created_at: rev.created.toISOString(),
-            });
-            stage_index++;
-          }
-        });
-
-      for(const comment of nep.comments) {
-        const author = this.db.person.get(
-          this.usernameToID.get(isGithubComment(comment)
-            ? `${githubDomain} ${comment.author.login}`
-            : `${emailDomain} ${comment.author.email}`)!
-        )!;
-        const newID = commentToID.get(comment.id)!;
-        this.db.comment.set(newID, {
-          comment_id: newID,
-          author_id: author.person_id,
-          author,
-          project_id: proposal.project_id,
-          proposal_id: proposal.proposal_id,
-          proposal,
-          created_at: comment.created.toISOString(),
-          comment_on_comment_id: comment.replyTo !== undefined
-            ? commentToID.get(comment.replyTo)
-            : undefined,
-          content: comment.body,
-        });
-      }
-    }
-
-    // another run to find related proposals
-    for(const nep of neps) {
-      if(nep.supersederID !== undefined) {
-        const superseded = this.db.proposal.get(`${this.projID()} ${nep.id}`)!;
-        const superseder = this.db.proposal.get(`${this.projID()} ${nep.supersederID}`)!;
-        this.db.related_proposal.push(new RelatedProposalSQL({
-          proposal: superseder,
-          related_proposal: superseded,
-          type: 'supersedes',
-        }));
-      }
-    }
   }
 }
 

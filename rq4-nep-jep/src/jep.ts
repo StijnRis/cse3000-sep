@@ -1,11 +1,13 @@
 import { scrapeJEP, collectIDsJEP, getSupersederJEPs } from "./jep-scraper.ts";
 import type { JEP } from "./jep-scraper.ts";
-import { JEPPersister, dataSource, dumpDatabase } from "./persist.ts";
+import { dataSource, dumpDatabase } from "./persist.ts";
+import { JEPPersister } from "./jep-persist.ts";
+import { getArg } from "./args-helper.ts";
 
-const dbName = process.argv[2] as string | undefined;
-const cacheDirPart = process.argv[3] || '';
+const dbName = getArg('db-name');
+const cacheDirPart = getArg('cache-dir');
 const cacheDir = cacheDirPart ? `cache/${cacheDirPart}` : '';
-const saveDirPart = process.argv[4] || '';
+const saveDirPart = getArg('save-dir');
 const saveDir = saveDirPart ? `data/jep/${saveDirPart}` : undefined;
 const jepIDs = await collectIDsJEP(cacheDir);
 const superseders = await getSupersederJEPs(cacheDir);
