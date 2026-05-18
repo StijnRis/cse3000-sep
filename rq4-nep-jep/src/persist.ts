@@ -243,20 +243,18 @@ export abstract class Persister<SEP_T> {
 /**
  * Creates and initializes new SQLite data source
  * @param database file name, or in-memory
+ * @param dropSchema true to start with clean database (will destroy any existing data), false to keep data
  * @returns data source
  */
-export const dataSource = async (database: string): Promise<DataSource> => {
-  const db = new DataSource({
+export const dataSource = async (database: string, dropSchema: boolean): Promise<DataSource> =>
+  await new DataSource({
     type: 'sqlite',
     database,
     entities: [ProjectSQL, PersonSQL, PersonUsernameSQL, ProposalSQL, ProposalRevisionSQL, StageHistorySQL, RelatedProposalSQL, CommentSQL],
     synchronize: true,
-    dropSchema: true,
+    dropSchema,
     // logging: true,
-  });
-  await db.initialize();
-  return db;
-};
+  }).initialize();
 
 /**
  * Dumps in-memory DB into real DB
