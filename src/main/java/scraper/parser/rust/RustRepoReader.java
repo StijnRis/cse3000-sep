@@ -1,21 +1,9 @@
 package scraper.parser.rust;
 
-import com.google.gson.Gson;
-import com.google.gson.stream.JsonReader;
-import lombok.Getter;
-import lombok.Setter;
 import okhttp3.*;
 import org.hibernate.Session;
-import org.jetbrains.annotations.NotNull;
-import retrofit2.Call;
-import retrofit2.Response;
-import retrofit2.Retrofit;
-import retrofit2.converter.gson.GsonConverterFactory;
 import scraper.data.Project;
-import scraper.data.author.Affiliation;
-import scraper.data.author.Organisation;
 import scraper.data.author.Person;
-import scraper.data.author.PersonUsername;
 import scraper.data.proposal.Comment;
 import scraper.data.proposal.Proposal;
 import scraper.data.proposal.StageHistory;
@@ -24,55 +12,29 @@ import scraper.data.proposal.revision.ProposalRevisionAuthor;
 import scraper.data.proposal.revision.ProposalRevisionAuthorId;
 import scraper.data.proposal.revision.ProposalRevisionId;
 import scraper.parser.GitHubService;
+import scraper.parser.RepoReader;
 import util.Log;
 
 import java.io.*;
-import java.lang.reflect.Type;
 import java.sql.Date;
 import java.util.*;
 
-public class RustRepoReader {
+public class RustRepoReader extends RepoReader {
+    private static final String OWNER = "rust-lang";
+    private static final String REPO = "rfcs";
 
-    @Getter
-    @Setter
-    private int authorIndex; //Assigned project id (5) * 1 million
-
-    private final GitHubService service;
-
-    private final Session session;
-    private final String cacheDir;
-    private final boolean ignoreCached;
-    private final Project project;
-
-    //Result storage
-    @Getter
-    private List<Proposal> proposals = new ArrayList<>();
-
-    @Getter
-    private List<ProposalRevisionAuthor> proposalRevisionAuthors = new ArrayList<>();
-
-    @Getter
-    private List<Comment> comments = new ArrayList<>();
-
-    //State variables
-    private int rateLimit = 1;
-    private int commentIndex = 5000000; //Assigned project id (5) * 1 million
-    private int organisationIndex = 5000000;
 
     public RustRepoReader(Session session, String authToken, String cacheDir, boolean ignoreCached, Project project, int authorIndex) throws IOException {
-        this.session = session;
-        this.cacheDir = cacheDir;
-        this.ignoreCached = ignoreCached;
-        this.project = project;
-        this.authorIndex = authorIndex;
+        super(session, authToken, cacheDir, ignoreCached, project, authorIndex);
 
-        Retrofit retrofit = buildRetrofit(authToken);
-        service = retrofit.create(GitHubService.class);
+        commentIndex = 5000000;
+        organisationIndex = 5000000;
     }
 
+    @Override
     public void scrapeGitHubData() throws IOException {
         Log.log("GitHub: Indexing PRs");
-        List<GitHubService.PullRequest> prs = getPullRequestsFromAPI();
+        List<GitHubService.PullRequest> prs = getPullRequestsFromAPI(OWNER, REPO);
 
         int success = 0;
         int failure = 0;
@@ -98,7 +60,7 @@ public class RustRepoReader {
                 comments.add(prComment);
 
                 Log.oLog("GitHub Scraping: Grabbing Conversations");
-                List<GitHubService.Conversation> conversations = getConversationFromAPI(pr);
+                List<GitHubService.Conversation> conversations = getConversationFromAPI(OWNER, REPO, pr);
 
                 //Make sure in order.
                 Comment lastComment = prComment;
@@ -118,7 +80,7 @@ public class RustRepoReader {
                 }
 
                 Log.oLog("GitHub Scraping: Grabbing Review Comments");
-                List<GitHubService.ReviewComment> revComments = getReviewCommentsFromAPI(pr);
+                List<GitHubService.ReviewComment> revComments = getReviewCommentsFromAPI(OWNER, REPO, pr);
                 HashMap<Integer, Comment> lastCommentAtLine = new HashMap<Integer, Comment>();
                 for(GitHubService.ReviewComment revComment : revComments) {
                     Comment comment = new Comment(commentIndex,
@@ -147,21 +109,22 @@ public class RustRepoReader {
         Log.log(String.format("GitHub Scraping:  %s completed, %s failed. Failure rate: %s", success, failure, r));
     }
 
+    @Override
     public List<ProposalRevision> createRevisionHistory(Proposal proposal) throws IOException {
         List<ProposalRevision> revisions = new ArrayList<>();
-        List<GitHubService.PRCommit> commits = getCommitListFromAPI(proposal.getPullRequest());
+        List<GitHubService.PRCommit> commits = getCommitListFromAPI(OWNER, REPO, proposal.getPullRequest());
 
         for (int i = 0; i < commits.size(); i++) {
             try {
                 GitHubService.PRCommit commit = commits.get(i);
-                GitHubService.PRCommit prc = getCommitFromAPI(commit.getSha());
+                GitHubService.PRCommit prc = getCommitFromAPI(OWNER, REPO, commit.getSha());
                 GitHubService.RawFile file = null;
 
                 //Some safeties to avoid weird states with missing files and existing authors.
                 int index = 0;
                 while (file == null && index < commits.size()) {
                     try {
-                        file = getFileFromAPI(commit.getSha(), prc.getFiles()[index].getFilename());
+                        file = getFileFromAPI(OWNER, REPO, commit.getSha(), prc.getFiles()[index].getFilename());
                     } catch(Exception e) {} //silent fail
                     index++;
                 }
@@ -207,88 +170,6 @@ public class RustRepoReader {
         return revisions;
     }
 
-    private GitHubService.RawFile getFileFromAPI(String ref, String filePath) throws IOException {
-        String[] pathSplit = filePath.split("/");
-        String fileName = pathSplit[pathSplit.length - 1];
-        File cache = new File(cacheDir + "file_" + ref + "_" + fileName + ".json");
-
-        return prepareData(cache,
-                GitHubService.RawFile.class,
-                service.getFile("rust-lang", "rfcs", filePath, ref)
-        );
-    }
-
-    private GitHubService.PRCommit getCommitFromAPI(String ref) throws IOException {
-        File cache = new File(cacheDir + "commit_" + ref + ".json");
-
-        return prepareData(cache,
-                GitHubService.PRCommit.class,
-                service.getCommit("rust-lang", "rfcs", ref)
-        );
-    }
-
-    private List<GitHubService.PRCommit> getCommitListFromAPI(GitHubService.PullRequest pr) throws IOException {
-        File cache = new File(cacheDir + "pr_commits_" + pr.getNumber() + ".json");
-
-        return List.of(prepareData(cache,
-                GitHubService.PRCommit[].class,
-                service.getPrCommits("rust-lang", "rfcs", String.valueOf(pr.getNumber()))
-        ));
-    }
-
-    private Person getOrCreateAuthor(GitHubService.GitHubUser user) throws IOException {
-        if(user == null) user = new GitHubService.GitHubUser("ghost", null, null, null);
-        if(user.getLogin() != null) user = getFullUserFromAPI(user);
-
-        //Attempt to match to existing
-        Optional<Person> author = Person.findAuthorByGitHubName(session, user.getLogin());
-        if(author.isEmpty()) author = Person.findAuthorByEmail(session, user.getEmail());
-        if(author.isEmpty()) author = Person.findAuthorByName(session, user.getName());
-
-        if(author.isEmpty()) { //Create new
-            Person person = Person.create(session, authorIndex, user.getName());
-            authorIndex++;
-
-            if(user.getLogin() != null) PersonUsername.create(session, person, "github", user.getLogin());
-            if(user.getEmail() != null) PersonUsername.create(session, person, "email", user.getEmail());
-            if(user.getCompany() != null) getOrCreateAffiliation(user.getCompany(), person);
-
-            return person;
-        }
-
-        //Ensure all data is present if author was found
-        if (user.getLogin() != null && Person.findAuthorByGitHubName(session, user.getLogin()).isEmpty()) {
-            PersonUsername.create(session, author.get(), "github", user.getLogin());
-        }
-
-        if (user.getEmail() != null && Person.findAuthorByEmail(session, user.getEmail()).isEmpty()) {
-            PersonUsername.create(session, author.get(), "email", user.getEmail());
-        }
-
-        if (user.getCompany() != null) getOrCreateAffiliation(user.getCompany(), author.get());
-
-        //This should always be last!
-        if (user.getName() != null && Person.findAuthorByName(session, user.getName()).isEmpty()) {
-            Person updated = author.get();
-            updated.setFullName(user.getName());
-            return updated.save(session);
-        }
-
-        return author.get();
-    }
-
-    private Affiliation getOrCreateAffiliation(String orgName, Person person) {
-        Optional<Organisation> org = Organisation.findByName(session, orgName);
-        if(org.isEmpty()) {
-            org = Optional.of(Organisation.create(session, organisationIndex, orgName));
-            organisationIndex++;
-        }
-
-        Optional<Affiliation> aff = Affiliation.find(session, org.get(), person);
-        if(aff.isEmpty()) return Affiliation.create(session, org.get(), person);
-        return aff.get();
-    }
-
     private void createStageHistory(GitHubService.PullRequest pr, Proposal proposal) {
         StageHistory.create(session, proposal, 0, "created", pr.getCreated_at());
 
@@ -297,146 +178,6 @@ public class RustRepoReader {
         } else if(pr.getClosed_at() != null) {
             StageHistory.create(session, proposal, 1, "closed", pr.getClosed_at());
         }
-    }
-
-    private GitHubService.GitHubUser getFullUserFromAPI(GitHubService.GitHubUser user) throws IOException {
-        File cache = new File(cacheDir + "gh_user_" + user.getLogin() + ".json");
-
-        return prepareData(cache,
-                GitHubService.GitHubUser.class,
-                service.getUser(user.getLogin())
-        );
-    }
-
-    private List<GitHubService.Conversation> getConversationFromAPI(GitHubService.PullRequest pr) throws IOException {
-        File cache = new File(cacheDir + "conv_" + pr.getNumber() + ".json");
-
-        return List.of(prepareData(cache,
-                GitHubService.Conversation[].class,
-                service.getPrConversations("rust-lang", "rfcs", String.valueOf(pr.getNumber()))
-        ));
-    }
-
-    private List<GitHubService.ReviewComment> getReviewCommentsFromAPI(GitHubService.PullRequest pr) throws IOException {
-        File cache = new File(cacheDir + "revc_" + pr.getNumber() + ".json");
-
-        return List.of(prepareData(cache,
-                GitHubService.ReviewComment[].class,
-                service.getPrComments("rust-lang", "rfcs", String.valueOf(pr.getNumber()))
-        ));
-    }
-
-    private List<GitHubService.PullRequest> getPullRequestsFromAPI() throws IOException {
-        File subCache = new File(cacheDir + "_prIndex_0.json");
-        if(!ignoreCached && subCache.isFile()) {
-            Log.oLog("GitHub Scraping: Only subcache exists, compiling");
-            return compilePRSubCaches();
-        }
-
-        if(rateLimit <= 0) {
-            Log.warn("GitHub Scraping: GitHub Rate Limit reached. Cannot index PRs");
-            throw new IOException("Rate Limit Reached");
-        }
-
-        int subIndex = 0;
-        boolean hasNextPage = true;
-
-        while(hasNextPage) {
-            File prIndexSubCache = new File(cacheDir + "_prIndex_" + subIndex + ".json");
-            Headers headers = writeCallToFile(prIndexSubCache, service.getPrList("rust-lang", "rfcs", "all", "created", "asc", 100, subIndex+1));
-            subIndex++;
-
-            String linkHeader = headers.get("link");
-            if(linkHeader == null || !linkHeader.contains("rel=\"next\"")) {
-                hasNextPage = false;
-            }
-        }
-
-        return compilePRSubCaches();
-    }
-
-    private List<GitHubService.PullRequest> compilePRSubCaches() throws IOException {
-        List<GitHubService.PullRequest> arr = new ArrayList<>();
-
-        int subIndex = 0;
-        File prIndexSubCache = new File(cacheDir + "_prIndex_" + subIndex + ".json");
-
-        while(prIndexSubCache.isFile()) {
-            Log.oLog("GitHub Scraping: Compiling subcache, at file " + prIndexSubCache.getName());
-            arr.addAll(List.of(readFromFile(prIndexSubCache, GitHubService.PullRequest[].class)));
-
-            subIndex++;
-            prIndexSubCache = new File(cacheDir + "_prIndex_" + subIndex + ".json");
-        }
-
-        return arr;
-    }
-
-    private <T> T prepareData(File cacheFile, Type type, Call<ResponseBody> call) throws IOException {
-        if(!ignoreCached && cacheFile.isFile()) {
-            Log.oLog("GitHub Scraping: Cache hit: " + cacheFile.getName());
-            return readFromFile(cacheFile, type);
-        }
-
-        if(rateLimit <= 0) {
-            Log.warn("GitHub Scraping: GitHub Rate Limit reached. Skipping " + call.request().url());
-            throw new IOException("Rate Limit Reached");
-        }
-
-        writeCallToFile(cacheFile, call);
-        return readFromFile(cacheFile, type);
-    }
-
-    private <T> T readFromFile(File file, Type type) throws FileNotFoundException {
-        Gson gson = new Gson().newBuilder().setDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'").create();
-        JsonReader reader = new JsonReader(new FileReader(file));
-        return (T) gson.fromJson(reader, type);
-    }
-
-    private Headers writeCallToFile(File file, Call<ResponseBody> call) throws IOException {
-        Log.oLog("GitHub Scraping: API Call (Rate limit: %d): %s".formatted(rateLimit, call.request().url()));
-
-        Response<ResponseBody> response = call.execute();
-
-        String rL = response.headers().get("x-ratelimit-remaining");
-        rateLimit = Integer.parseInt(rL != null ? rL : "1");
-
-        if(response.body() == null) throw new IOException("Empty body from response");
-
-        //Save document to disk as cache for rate limiting reasons
-        BufferedWriter writer = new BufferedWriter(
-                new FileWriter(file)
-        );
-
-        writer.write(response.body().string());
-        writer.close();
-
-        return response.headers();
-    }
-
-    private Retrofit buildRetrofit(String authToken) {
-        Retrofit.Builder retrofit = new Retrofit.Builder()
-                .baseUrl("https://api.github.com")
-                .addConverterFactory(GsonConverterFactory.create());
-
-        if (authToken == null) return retrofit.build();
-
-        // Source - https://stackoverflow.com/a/41082979
-        // Posted by iagreen
-        // Retrieved 2026-05-12, License - CC BY-SA 3.0
-
-        OkHttpClient client = new OkHttpClient.Builder().addInterceptor(new Interceptor() {
-            @NotNull
-            @Override
-            public okhttp3.Response intercept(@NotNull Chain chain) throws IOException {
-                Request newRequest  = chain.request().newBuilder()
-                        .addHeader("Authorization", "Bearer " + authToken)
-                        .build();
-                return chain.proceed(newRequest);
-            }
-        }).build();
-
-        return retrofit.client(client).build();
     }
 
     /* Remnants of trying to parse HTML documents. Leaving it in for history.

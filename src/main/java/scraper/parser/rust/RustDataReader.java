@@ -1,15 +1,12 @@
 package scraper.parser.rust;
 
-import lombok.Getter;
 import org.eclipse.jgit.errors.MissingObjectException;
-import org.eclipse.jgit.lib.Repository;
-import org.eclipse.jgit.storage.file.FileRepositoryBuilder;
 import org.hibernate.Session;
 import scraper.data.*;
 import scraper.data.proposal.Proposal;
 import scraper.data.proposal.ProposalId;
 import scraper.data.proposal.revision.ProposalRevision;
-import scraper.data.proposal.revision.ProposalRevisionAuthor;
+import scraper.parser.DataReader;
 import util.Log;
 
 import java.io.*;
@@ -17,45 +14,22 @@ import java.net.MalformedURLException;
 import java.util.*;
 import java.util.stream.Collectors;
 
-public class RustDataReader {
+public class RustDataReader extends DataReader {
 
-    @Getter
-    private List<Proposal> proposals;
-
-    @Getter
-    private List<ProposalRevision> proposalRevisions = new ArrayList<>();
-
-    @Getter
-    private List<ProposalRevisionAuthor> revisionAuthors = new ArrayList<>();
-
-    @Getter
-    private int authorIndex; //Assigned project id (5) * 1 million
-
-    private final Session session;
-    private final Repository repository;
     private final RustRepoReader rr;
-    private final Project project;
-    private final String rootDirPath;
 
     public RustDataReader(Session session, Project project, RustRepoReader rr, String rootDirPath, List<Proposal> proposals) throws IOException {
-        this.session = session;
-        this.project = project;
+        super(session, project, rootDirPath, proposals);
         this.rr = rr;
-        this.rootDirPath = rootDirPath;
-        this.proposals = proposals;
 
         authorIndex = rr.getAuthorIndex();
-        FileRepositoryBuilder builder = new FileRepositoryBuilder();
-        repository = builder.setGitDir(new File(rootDirPath + ".git/"))
-                .readEnvironment()
-                .findGitDir()
-                .build();
     }
 
     /**
      * Reads all RustRFCs to build a proposal list. Expects a directory to be set from the constructor using the layout in the rfcs repository.
      */
-    public void readProjectMarkdownFiles() throws IllegalArgumentException {
+    @Override
+    public void readProjectFiles() throws IllegalArgumentException {
         Log.log("Git: Adding Revisions");
 
         int success = 0;

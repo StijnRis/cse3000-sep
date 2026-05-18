@@ -2,8 +2,12 @@ import org.eclipse.jgit.api.Git;
 import org.hibernate.Session;
 import org.hibernate.Transaction;
 import scraper.data.Project;
+import scraper.parser.DataReader;
+import scraper.parser.RepoReader;
 import scraper.parser.rust.RustDataReader;
 import scraper.parser.rust.RustRepoReader;
+import scraper.parser.swift.SwiftDataReader;
+import scraper.parser.swift.SwiftRepoReader;
 import util.HibernateUtil;
 import util.Log;
 
@@ -17,8 +21,10 @@ public class RustScraper {
     public static Map<String, String> arguments = new HashMap<>();
 
     public static HibernateUtil db2;
-    public static RustDataReader dr;
-    public static RustRepoReader rr;
+    public static RustRepoReader rrr;
+    public static RustDataReader rdr;
+    public static SwiftRepoReader srr;
+    public static SwiftDataReader sdr;
 
     public static void main(String[] args) throws Exception {
         Log.log("Started Scraper");
@@ -33,7 +39,6 @@ public class RustScraper {
 
         //File path setup
         String rootFolder = arguments.get("local");
-        String gitRootFolder = rootFolder + "rfcs/";
         String cacheFolder = rootFolder + "cache/";
         String dbPath = rootFolder + "dataset.sqlite";
 
@@ -43,69 +48,100 @@ public class RustScraper {
         db2 = new HibernateUtil(dbPath);
         Session s = db2.getSession();
 
-        Project project = new Project(5, "Rust", "RFC", "MIT or Apache-2.0");
+        boolean runRust = arguments.get("project").equals("rust");
+        boolean runSwift = arguments.get("project").equals("swift");
+        boolean runAll = arguments.get("project").equals("all");
 
-        //Project must already persist in database due to autogeneration of index and dependency on this.
-        persistOne(s, project); //Generate internal ids for proposals, otherwise PK violation below.
-
-        if(arguments.get("project").equals("rust")) {
-            scrapeGitHubPRs(s, project, cacheFolder);
-
-            Log.log("Pulling latest changes from GitHub");
-            downloadRustRepository(gitRootFolder);
-            scrapeGitFiles(s, project, gitRootFolder);
+        if(runRust || runAll) {
+            scrapeRust(rootFolder, cacheFolder, s);
+        }
+        if(runSwift || runAll) {
+            scrapeSwift(rootFolder, cacheFolder, s);
         }
 
         s.close();
         Log.log("Exiting");
     }
 
-    private static void scrapeGitHubPRs(Session s, Project project, String cacheFolder) {
-        Log.log("RustRepoReader: Begin building");
-        try {
-            rr = new RustRepoReader(s, arguments.get("token"), cacheFolder,
-                    Boolean.parseBoolean(arguments.getOrDefault("ignorecache", "false")),
-                    project,5000000);
+    private static void scrapeSwift(String rootFolder, String cacheFolder, Session s) throws Exception {
+        Log.log("Swift: Started");
+        String gitRootFolder = rootFolder + "swift-evolution/";
+        Project project = new Project(7, "Swift", "SE", "Apache-2.0");
 
-            rr.scrapeGitHubData();
+        //Project must already persist in database to prevent references to transient entities.
+        persistOne(s, project);
+
+        srr = new SwiftRepoReader(s, arguments.get("token"), cacheFolder,
+                Boolean.parseBoolean(arguments.getOrDefault("ignorecache", "false")),
+                project, 7000000);
+
+        scrapeGitHubPRs(s, srr);
+        downloadRepository(gitRootFolder, "https://github.com/swiftlang/swift-evolution.git");
+
+        Log.log("Swift: Building DataReader");
+        sdr = new SwiftDataReader(s, project, srr, gitRootFolder, srr.getProposals());
+        scrapeGitFiles(s, sdr);
+    }
+
+    private static void scrapeRust(String rootFolder, String cacheFolder, Session s) throws Exception {
+        Log.log("Rust: Started");
+        String gitRootFolder = rootFolder + "rfcs/";
+        Project project = new Project(5, "Rust", "RFC", "MIT or Apache-2.0");
+
+        //Project must already persist in database to prevent references to transient entities.
+        persistOne(s, project);
+
+        rrr = new RustRepoReader(s, arguments.get("token"), cacheFolder,
+                Boolean.parseBoolean(arguments.getOrDefault("ignorecache", "false")),
+                project,5000000);
+
+        scrapeGitHubPRs(s, rrr);
+        downloadRepository(gitRootFolder, "https://github.com/rust-lang/rfcs.git");
+
+        Log.log("Rust: Building DataReader");
+        rdr = new RustDataReader(s, project, rrr, gitRootFolder, rrr.getProposals());
+        scrapeGitFiles(s, rdr);
+    }
+
+    private static void scrapeGitHubPRs(Session s, RepoReader reader) {
+        try {
+            reader.scrapeGitHubData();
 
             Log.log("DB: Persisting Proposals");
-            persistAll(s, rr.getProposals());
+            persistAll(s, reader.getProposals());
             Log.log("DB: Persisting Comments");
-            persistAll(s, rr.getComments());
+            persistAll(s, reader.getComments());
         } catch (Exception e) {
             Log.error("Failed reading data from GitHub: " + e);
             System.exit(-1);
         }
     }
 
+    private static void downloadRepository(String rootFolder, String uri) throws Exception {
+        Log.log("Pulling Repository: " + uri);
 
-    private static void downloadRustRepository(String rootFolder) throws Exception {
         File rFFile = new File(rootFolder);
         if(rFFile.isDirectory()) {
             Git.open(rFFile)
                     .pull();
         } else {
             Git.cloneRepository()
-                    .setURI("https://github.com/rust-lang/rfcs.git")
+                    .setURI(uri)
                     .setDirectory(rFFile)
                     .call();
         }
     }
 
-    private static void scrapeGitFiles(Session s, Project project, String rootFolder) {
-        Log.log("RustDataReader: Begin building");
+    private static void scrapeGitFiles(Session s, DataReader reader) {
         try {
-            dr = new RustDataReader(s, project, rr, rootFolder, rr.getProposals());
-
-            dr.readProjectMarkdownFiles();
+            reader.readProjectFiles();
 
             Log.log("DB: Persisting Proposal Revisions");
-            persistAll(s, dr.getProposalRevisions());
+            persistAll(s, reader.getProposalRevisions());
             Log.log("DB: Persisting Revision Authors");
-            persistAll(s, dr.getRevisionAuthors());
+            persistAll(s, reader.getRevisionAuthors());
         } catch (Exception e) {
-            Log.error("Failed reading data from rust project: " + e);
+            Log.error("Failed reading data from project: " + e);
             System.exit(-1);
         }
     }
