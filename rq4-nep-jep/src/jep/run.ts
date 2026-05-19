@@ -1,12 +1,16 @@
-import { scrapeJEP, collectIDsJEP, getSupersederJEPs } from "./jep-scraper.ts";
-import type { JEP } from "./jep-scraper.ts";
-import { JEPPersister, dataSource, dumpDatabase } from "./persist.ts";
+import { scrapeJEP, collectIDsJEP, getSupersederJEPs } from "./scraper.ts";
+import type { JEP } from "./scraper.ts";
+import { dataSource, dumpDatabase } from "../persist.ts";
+import { JEPPersister } from "./persist.ts";
+import { getArg, isArg } from "../args-helper.ts";
 
-const dbName = process.argv[2] as string | undefined;
-const cacheDirPart = process.argv[3] || '';
+const dbName = getArg('db-name');
+const cacheDirPart = getArg('cache-dir');
 const cacheDir = cacheDirPart ? `cache/${cacheDirPart}` : '';
-const saveDirPart = process.argv[4] || '';
+const saveDirPart = getArg('save-dir');
 const saveDir = saveDirPart ? `data/jep/${saveDirPart}` : undefined;
+const newDB = isArg('new-db');
+
 const jepIDs = await collectIDsJEP(cacheDir);
 const superseders = await getSupersederJEPs(cacheDir);
 const jeps: JEP[] = [];
@@ -17,5 +21,5 @@ for(const id of jepIDs) {
   console.log(`Successfully scraped JEP ${jep.id}`);
 }
 const db = new JEPPersister().persist(jeps);
-const source = await dataSource(dbName ? `data/${dbName}.db` : ':memory:');
+const source = await dataSource(dbName ? `data/${dbName}.db` : ':memory:', newDB);
 await dumpDatabase(source, db);

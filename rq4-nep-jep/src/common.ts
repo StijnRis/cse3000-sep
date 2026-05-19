@@ -1,20 +1,22 @@
 import { parse, HTMLElement } from 'node-html-parser';
 import { XMLParser } from 'fast-xml-parser';
 import { readFileSync, existsSync } from 'node:fs';
+import { Readable } from 'node:stream';
 import efs from 'fs-extra';
 const { outputFileSync } = efs;
-import type { SEP, GithubUser, GithubComment, GithubCommentJSON } from '../types.d.ts';
+import type { SEP, GithubUser, GithubComment, GithubCommentJSON, Email } from '../types.d.ts';
+import { mboxParser, ParsedMail } from 'mbox-parser';
 
 /**
  * Fetch page of given URL
  * Caches content and gets it from cache if present
  * @param url URL to fetch (without https://)
- * @param contentType HTML, XML, JSON
+ * @param contentType HTML, XML, JSON, RST
  * @param cacheDir directory for cache file, which is named using URL; leave out or empty for no caching
  * @param headers optional HTTP headers
  * @returns text of page, to be parsed as needed
  */
-const fetchParsed = async (url: string, contentType: 'html' | 'xml' | 'json', cacheDir: string = '', headers?: HeadersInit): Promise<string> => {
+export const fetchText = async (url: string, contentType: 'html' | 'xml' | 'json' | 'rst', cacheDir: string = '', headers?: HeadersInit): Promise<string> => {
   const cacheFile = `${cacheDir}/${url}.${contentType}`;
   let resText: string;
   if(cacheDir && existsSync(cacheFile)) {
@@ -29,40 +31,48 @@ const fetchParsed = async (url: string, contentType: 'html' | 'xml' | 'json', ca
 /**
  * Fetch HTML page
  * Caches by default
- * @param url URL to fetch
+ * @param url URL to fetch (without https://)
  * @param cacheDir cache folder, empty string for no caching
  * @param headers optional HTTP headers
  * @returns parsed HTMLElement
  */
 export const fetchHTMLParsed = async (url: string, cacheDir: string, headers?: HeadersInit): Promise<HTMLElement> => {
-  return parse(await fetchParsed(url, 'html', cacheDir, headers));
+  return parse(await fetchText(url, 'html', cacheDir, headers));
 };
 
 /**
  * Fetch XML page
  * Caches by default
- * @param url URL to fetch
+ * @param url URL to fetch (without https://)
  * @param parser XML parser
  * @param cacheDir cache folder, empty string for no caching
  * @param headers optional HTTP headers
  * @returns parsed XML object
  */
 export const fetchXMLParsed = async (url: string, parser: XMLParser, cacheDir: string, headers?: HeadersInit): Promise<any> => {
-  return parser.parse(await fetchParsed(url, 'xml', cacheDir, headers));
+  return parser.parse(await fetchText(url, 'xml', cacheDir, headers));
 };
 
 /**
  * Fetch JSON response
  * Caches by default
- * @param url URL to fetch
+ * @param url URL to fetch (without https://)
  * @param cacheDir cache folder, empty string for no caching
  * @param headers optional HTTP headers
  * @returns parsed JSON object
  */
 export const fetchJSONParsed = async <T>(url: string, cacheDir: string, headers?: HeadersInit): Promise<T> => {
-  return JSON.parse(await fetchParsed(url, 'json', cacheDir, headers));
+  return JSON.parse(await fetchText(url, 'json', cacheDir, headers));
 };
 
+/**
+ * Download file
+ * @param url URL to fetch (without https://)
+ * @param contentType response content type, as file extension (zip, gz)
+ * @param cacheDir cache folder, empty string for no caching
+ * @param headers optional HTTP headers
+ * @returns file as blob
+ */
 export const fetchFile = async (url: string, contentType: string, cacheDir: string, headers?: HeadersInit): Promise<Blob> => {
   const cacheFile = `${cacheDir}/${url}.${contentType}`;
   let resBlob: Blob;
@@ -80,13 +90,20 @@ export const fetchFile = async (url: string, contentType: string, cacheDir: stri
 };
 
 const githubAPIBase = 'api.github.com/';
-const githubUsersAPI = (login: string) => `${githubAPIBase}users/${login}`;
-const githubReposAPI = (owner: string, repo: string) => `${githubAPIBase}repos/${owner}/${repo}`;
-export const githubPullsAPI = (owner: string, repo: string, pullID: number) => `${githubReposAPI(owner, repo)}/pulls/${pullID}`;
-export const githubIssuesAPI = (owner: string, repo: string, issueID: number) => `${githubReposAPI(owner, repo)}/issues/${issueID}`;
+const githubUserAPI = (login: string) => `${githubAPIBase}users/${login}`;
+const githubRepoAPI = (owner: string, repo: string) => `${githubAPIBase}repos/${owner}/${repo}`;
+export const githubPullAPI = (owner: string, repo: string, pullID: number) => `${githubRepoAPI(owner, repo)}/pulls/${pullID}`;
+export const githubIssueAPI = (owner: string, repo: string, issueID: number) => `${githubRepoAPI(owner, repo)}/issues/${issueID}`;
+export const githubCommitsForPathAPI = (owner: string, repo: string, path: string) => `${githubRepoAPI(owner, repo)}/commits?path=${path}`;
+export const githubCommitAPI = (owner: string, repo: string, ref: string) => `${githubRepoAPI(owner, repo)}/commits/${ref}`;
 
 export const pythonMailListURL = (list: string, threadID: string, fileName: string) =>
   `mail.python.org/archives/list/${list}@python.org/export/${fileName}.mbox.gz?thread=${threadID}`;
+export const pythonMailIntervalURL = (list: string,
+  fromYear: number, fromMonth: number, fromDay: number,
+  toYear: number, toMonth: number, toDay: number,
+  fileName: string
+) => `mail.python.org/archives/list/${list}@python.org/export/${fileName}.mbox.gz?start=${fromYear}-${fromMonth}-${fromDay}&end=${toYear}-${toMonth}-${toDay}`;
 
 const ghHeaders: HeadersInit = {
   'Accept': 'application/vnd.github+json',
@@ -104,7 +121,7 @@ export const ghAuthHeaders: HeadersInit = {
  * @returns user details
  */
 export const getGithubUser = async (login: string, cacheDir: string): Promise<GithubUser> => {
-  const { name } = await fetchJSONParsed<GithubUser>(githubUsersAPI(login), cacheDir, ghHeaders);
+  const { name } = await fetchJSONParsed<GithubUser>(githubUserAPI(login), cacheDir, ghAuthHeaders);
   return { login, name };
 };
 
@@ -122,12 +139,41 @@ export const parseGithubCommentJSON = async ({
   body,
 });
 
+export const parseMboxEmail = ({
+  messageId,
+  inReplyTo,
+  from,
+  date,
+  text,
+}: ParsedMail): Email => ({
+  id: messageId!,
+  replyTo: inReplyTo,
+  author: {
+    email: from!.value[0].address!,
+    name: from!.value[0].name,
+  },
+  created: date!,
+  body: text!,
+});
+
+/**
+ * Get an archive of emails in mbox format and parse them
+ * @param url URL returning a .mbox.gz file
+ * @param cacheDir cache folder
+ * @returns list of parsed email objects
+ */
+export const fetchEmails = async (url: string, cacheDir: string): Promise<ParsedMail[]> => {
+  const gzBlob = await fetchFile(url, 'gz', cacheDir);
+  const unpacked = gzBlob.stream().pipeThrough(new DecompressionStream('gzip'));
+  return await mboxParser(Readable.from(unpacked));
+}
+
 /**
  * Groups SEPs by the ID of their latest revision
  * @param seps all SEPs; superseders must also be present
  * @returns map with lists of SEPs grouped by the ID of the final superseder, each sorted by ID descending
  */
-export const groupByFinalID = <A,T,S,C, SEP_T extends SEP<A,T,S,C>>(seps: SEP_T[]): Map<SEP_T['id'], SEP_T[]> => {
+export const groupByFinalID = <T,C, SEP_T extends SEP<T,C>>(seps: SEP_T[]): Map<SEP_T['id'], SEP_T[]> => {
   const byID = new Map<SEP_T['id'], SEP_T>();
   for(const sep of seps) {
     byID.set(sep.id, sep);

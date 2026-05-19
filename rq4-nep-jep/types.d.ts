@@ -1,12 +1,8 @@
-export type SEP<A, T, S, C> = {
+export type SEP<T, C> = {
   id: number,
   title: string,
-  authors: A[],
   type: T,
-  status: S,
   supersederID?: number,
-  created: Date,
-  content: string,
   comments: C[],
 };
 
@@ -37,17 +33,21 @@ export type GithubCommentJSON = {
   in_reply_to_id?: number,
 };
 
-// export type RelatedProposal (
-//     project_id INTEGER,
-//     proposal_id TEXT,
-//     related_project_id INTEGER,
-//     related_proposal_id TEXT,
-//     PRIMARY KEY (
-//         project_id,
-//         proposal_id,
-//         related_project_id,
-//         related_proposal_id
-//     ),
-//     FOREIGN KEY (project_id, proposal_id) REFERENCES Proposal(project_id, proposal_id),
-//     FOREIGN KEY (related_project_id, related_proposal_id) REFERENCES Proposal(project_id, proposal_id)
-// );
+export type GithubCommit = {
+  sha: string,
+  author: {
+    login: string,
+  },
+  commit: {
+    author: {
+      date: string,
+    },
+  },
+};
+
+export type GithubCommitDetailed = GithubCommit & {
+  files: {
+    filename: string,
+    raw_url: string,
+  }[],
+};

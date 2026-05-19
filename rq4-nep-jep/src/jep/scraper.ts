@@ -2,8 +2,8 @@ import { parse, HTMLElement } from 'node-html-parser';
 import { XMLParser } from "fast-xml-parser";
 import efs from 'fs-extra';
 const { outputJSONSync } = efs;
-import { fetchHTMLParsed, fetchXMLParsed } from "./common.ts";
-import type { SEP } from '../types.d.ts';
+import { fetchHTMLParsed, fetchXMLParsed } from "../common.ts";
+import type { SEP } from '../../types.js';
 
 //NOTE: all JEPs have issue IDs (long number), they get a JEP ID (short number) when they pass the draft phase
 const jepBaseURL = 'openjdk.org/jeps/';
@@ -38,11 +38,15 @@ type JEPComment = {
   created: Date,
   content: string,
 };
-export type JEP = SEP<string, JEPType, JEPStatus, JEPComment> & {
+export type JEP = SEP <JEPType, JEPComment> & {
   issueID: number,
   owner?: OpenJDKUser,
+  authors: string[],
+  created: Date,
+  status: JEPStatus,
   release?: string,
   relatedIDs: number[],
+  content: string,
 };
 type JEPXML = {
   created: string,
