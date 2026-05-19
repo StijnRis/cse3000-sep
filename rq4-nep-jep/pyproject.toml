@@ -1,0 +1,10 @@
+[project]
+name = "rq4-nep-jep"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "matplotlib>=3.10.9",
+    "nltk>=3.9.4",
+]

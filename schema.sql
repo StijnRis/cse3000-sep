@@ -39,8 +39,7 @@ CREATE TABLE Proposal (
     topic TEXT,
     proposal_type TEXT,
     PRIMARY KEY (project_id, proposal_id),
-    FOREIGN KEY (project_id) REFERENCES Project(project_id),
-    FOREIGN KEY (proposer_id) REFERENCES Person(person_id)
+    FOREIGN KEY (project_id) REFERENCES Project(project_id)
 );
 
 -- 4. Revisions & Authorship
@@ -88,7 +87,7 @@ CREATE TABLE RelatedProposal (
     proposal_id TEXT,
     related_project_id INTEGER,
     related_proposal_id TEXT,
-    type TEXT CHECK (type IN ('related', 'supersedes'))
+    type TEXT CHECK (type IN ('related', 'supersedes')),
     PRIMARY KEY (
         project_id,
         proposal_id,

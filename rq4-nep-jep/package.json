@@ -4,8 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "scrape-jep": "tsc && node --env-file-if-exists=.env build/jep.js",
-    "scrape-nep": "tsc && node --env-file-if-exists=.env build/nep.js",
+    "scrape-jep": "tsc && node --env-file-if-exists=.env build/jep/run.js",
+    "scrape-nep": "tsc && node --env-file-if-exists=.env build/nep/run.js",
     "test": "tsc && node --env-file-if-exists=.env build/test.js"
   },
   "keywords": [],
