@@ -1,7 +1,7 @@
-import { collectIDsNEP, scrapeNEP } from "./nep-scraper.ts";
-import { dataSource, dumpDatabase } from "./persist.ts";
-import { NEPPersister } from "./nep-persist.ts";
-import { getArg, isArg } from "./args-helper.ts";
+import { collectIDsNEP, scrapeNEP } from "./scraper.ts";
+import { dataSource, dumpDatabase } from "../persist.ts";
+import { NEPPersister } from "./persist.ts";
+import { getArg, isArg } from "../args-helper.ts";
 
 const dbName = getArg('db-name');
 const cacheDirPart = getArg('cache-dir');

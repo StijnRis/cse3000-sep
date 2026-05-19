@@ -5,6 +5,15 @@ GITHUB_TOKEN # auth token for github API
 GITHUB_API_VERSION # version of github API (see github docs for format)
 ```
 
+# Setup
+
+Clone the repo, install npm and uv, then:
+```bash
+cd <here>
+npm i
+uv sync
+```
+
 # Running scrapers
 
 ```bash

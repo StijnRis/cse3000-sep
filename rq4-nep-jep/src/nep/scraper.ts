@@ -1,8 +1,8 @@
 import { HTMLElement } from 'node-html-parser';
 import efs from 'fs-extra';
 const { outputJSONSync } = efs;
-import { fetchEmails, fetchHTMLParsed, fetchJSONParsed, fetchText, ghAuthHeaders, githubCommitAPI, githubCommitsForPathAPI, githubIssueAPI, githubPullAPI, parseGithubCommentJSON, parseMboxEmail, pythonMailIntervalURL, pythonMailListURL } from './common.ts';
-import type { SEP, EmailUser, Email, GithubComment, GithubCommentJSON, GithubCommit, GithubCommitDetailed } from '../types.d.ts';
+import { fetchEmails, fetchHTMLParsed, fetchJSONParsed, fetchText, ghAuthHeaders, githubCommitAPI, githubCommitsForPathAPI, githubIssueAPI, githubPullAPI, parseGithubCommentJSON, parseMboxEmail, pythonMailIntervalURL, pythonMailListURL } from '../common.ts';
+import type { SEP, EmailUser, Email, GithubComment, GithubCommentJSON, GithubCommit, GithubCommitDetailed } from '../../types.js';
 
 const nepBaseURL = 'numpy.org/neps/';
 

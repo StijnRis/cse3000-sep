@@ -1,7 +1,7 @@
-import { Persister, realNameDomain } from "./persist.ts"; 
-import type { JEP } from "./jep-scraper.ts";
-import { groupByFinalID } from "./common.ts";
-import { sortedBy } from "./util.ts";
+import { Persister, realNameDomain } from "../persist.ts"; 
+import type { JEP } from "./scraper.ts";
+import { groupByFinalID } from "../common.ts";
+import { sortedBy } from "../util.ts";
 
 const openjdkDomain = 'openjdk.org';
 

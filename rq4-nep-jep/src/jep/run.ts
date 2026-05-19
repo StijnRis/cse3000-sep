@@ -1,8 +1,8 @@
-import { scrapeJEP, collectIDsJEP, getSupersederJEPs } from "./jep-scraper.ts";
-import type { JEP } from "./jep-scraper.ts";
-import { dataSource, dumpDatabase } from "./persist.ts";
-import { JEPPersister } from "./jep-persist.ts";
-import { getArg, isArg } from "./args-helper.ts";
+import { scrapeJEP, collectIDsJEP, getSupersederJEPs } from "./scraper.ts";
+import type { JEP } from "./scraper.ts";
+import { dataSource, dumpDatabase } from "../persist.ts";
+import { JEPPersister } from "./persist.ts";
+import { getArg, isArg } from "../args-helper.ts";
 
 const dbName = getArg('db-name');
 const cacheDirPart = getArg('cache-dir');

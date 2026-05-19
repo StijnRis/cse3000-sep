@@ -1,7 +1,7 @@
-import { Persister, realNameDomain, emailDomain, githubDomain, RelatedProposalSQL } from "./persist.ts";
-import type { NEP, NEPRevision } from "./nep-scraper.ts";
-import { isGithubComment } from "./nep-scraper.ts";
-import { sortedBy } from "./util.ts";
+import { Persister, realNameDomain, emailDomain, githubDomain, RelatedProposalSQL } from "../persist.ts";
+import type { NEP, NEPRevision } from "./scraper.ts";
+import { isGithubComment } from "./scraper.ts";
+import { sortedBy } from "../util.ts";
 
 export class NEPPersister extends Persister<NEP> {
   project = {

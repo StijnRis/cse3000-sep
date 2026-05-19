@@ -1,7 +1,3 @@
-import { groupByFinalID } from "./common.ts";
-import type { JEP } from "./jep-scraper.ts";
-import { isGithubComment } from "./nep-scraper.ts";
-import type { NEP, NEPRevision } from "./nep-scraper.ts";
 import { Column, DataSource, Entity, JoinColumn, JoinTable, ManyToMany, ManyToOne, PrimaryColumn } from 'typeorm';
 import 'reflect-metadata';
 
