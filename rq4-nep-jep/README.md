@@ -40,7 +40,7 @@ Parameters:
 - **intermediate save folder name**: where to save SEP data as JSON, after fetching and parsing; will be saved by ID under the file `data/{project}/{name}/{id}.json`; if left out, then no intermediate saving
 - **`new-db`**: flag that drops the database in the file if it exists and creates a new one
 
-# Notes
+## Notes
 
 For the exact schema that is output, see `src/persist.ts`.
 
@@ -53,3 +53,7 @@ The file `nep-missing-dates.json` contains the oldest date from the GitHub histo
 The GitHub API can be accessed without a token, but the rate limit will be lower.
 
 Leaving out the `new-db` flag will cause the new data to be appended, and may cause primary key conflicts and such. One situation where you may want to leave it out is if you want to dump both JEP and NEP into the same database. IDs are different between projects, so that shouldn't cause issues.
+
+# Running analysis
+
+The notebook `analysis.ipynb` contains all the analysis scripts. After syncing uv, set the environment to the `.venv` folder. Then you can run cells. There may be dependencies from later cells to earlier cells.
