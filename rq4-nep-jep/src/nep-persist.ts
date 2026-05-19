@@ -1,6 +1,7 @@
 import { Persister, realNameDomain, emailDomain, githubDomain, RelatedProposalSQL } from "./persist.ts";
 import type { NEP, NEPRevision } from "./nep-scraper.ts";
 import { isGithubComment } from "./nep-scraper.ts";
+import { sortedBy } from "./util.ts";
 
 export class NEPPersister extends Persister<NEP> {
   project = {
@@ -25,13 +26,13 @@ export class NEPPersister extends Persister<NEP> {
   }
 
   persistPeople(neps: NEP[]) {
-    for(const nep of neps) {
-      for(const rev of nep.revisions)
-        for(const author of rev.authors) {
+    for(const nep of sortedBy(neps, n => n.id)) {
+      for(const rev of sortedBy(nep.revisions, r => r.created.getDate()))
+        for(const author of sortedBy(rev.authors, a => a.name)) {
           if(author.email === undefined) this.addPerson(author.name, author.name, realNameDomain);
           else this.addPerson(author.email, author.name, emailDomain);
         }
-      for(const comment of nep.comments) {
+      for(const comment of sortedBy(nep.comments, c => c.id)) {
         if(isGithubComment(comment)) this.addPerson(comment.author.login, comment.author.name, githubDomain);
         else this.addPerson(comment.author.email, comment.author.name, emailDomain);
       }
@@ -41,7 +42,7 @@ export class NEPPersister extends Persister<NEP> {
     // first need to generate IDs so that they can be referenced by replies
     const commentToID = new Map<number | string, number>();
     for(const nep of neps) {
-      for(const comm of nep.comments) {
+      for(const comm of sortedBy(nep.comments, c => c.id)) {
         if(!commentToID.has(comm.id)) {
           const newID = this.generateNumID(commentToID.size);
           commentToID.set(comm.id, newID);
