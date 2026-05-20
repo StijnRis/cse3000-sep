@@ -3,6 +3,8 @@ import type { NEP, NEPRevision } from "./scraper.ts";
 import { isGithubComment } from "./scraper.ts";
 import { sortedBy } from "../util.ts";
 
+const numpyDomain = 'numpy.org';
+
 export class NEPPersister extends Persister<NEP> {
   project = {
     project_id: 2,
@@ -14,14 +16,14 @@ export class NEPPersister extends Persister<NEP> {
   normalizeStatus(status: NEPRevision['status']) {
     return status ? ({
       'Draft': 'review',
-      'Active': 'active',
+      'Active': 'accepted',
       'Accepted': 'accepted',
-      'Deferred': 'withdrawn',
+      'Deferred': 'review',
       'Rejected': 'rejected',
       'Withdrawn': 'withdrawn',
       'Final': 'accepted',
       'Superseded': 'superseded',
-      'Provisional': 'provisional',
+      'Provisional': 'accepted',
     } as const)[status] : 'unknown';
   }
 
@@ -29,12 +31,25 @@ export class NEPPersister extends Persister<NEP> {
     for(const nep of sortedBy(neps, n => n.id)) {
       for(const rev of sortedBy(nep.revisions, r => r.created.getDate()))
         for(const author of sortedBy(rev.authors, a => a.name)) {
-          if(author.email === undefined) this.addPerson(author.name, author.name, realNameDomain);
-          else this.addPerson(author.email, author.name, emailDomain);
+          let person_id: number;
+          if(author.email !== undefined) {
+            person_id = this.ensurePerson(numpyDomain, 'email', author.email, author.name).person_id;
+            this.addPersonDetails(person_id, numpyDomain, 'email', author.email);
+          } else {
+            person_id = this.ensurePerson(numpyDomain, 'display_name', author.name, author.name).person_id;
+          }
+          this.addPersonDetails(person_id, numpyDomain, 'display_name', author.name);
         }
       for(const comment of sortedBy(nep.comments, c => c.id)) {
-        if(isGithubComment(comment)) this.addPerson(comment.author.login, comment.author.name, githubDomain);
-        else this.addPerson(comment.author.email, comment.author.name, emailDomain);
+        if(isGithubComment(comment)) {
+          const {person_id} = this.ensurePerson(githubDomain, 'username', comment.author.login, comment.author.name);
+          this.addPersonDetails(person_id, githubDomain, 'username', comment.author.login);
+          this.addPersonDetails(person_id, githubDomain, 'display_name', comment.author.name);
+        } else {
+          const {person_id} = this.ensurePerson(emailDomain, 'email', comment.author.email, comment.author.name);
+          this.addPersonDetails(person_id, emailDomain, 'email', comment.author.email);
+          this.addPersonDetails(person_id, emailDomain, 'display_name', comment.author.name);
+        }
       }
     }
   }
@@ -61,14 +76,14 @@ export class NEPPersister extends Persister<NEP> {
       };
       this.db.proposal.set(`${this.projID()} ${id}`, proposal);
 
-      let stage_index = 0; // increment only when status actually changes from one revision to the next
+      let status_index = 0; // increment only when status actually changes from one revision to the next
       nep.revisions
         // index ordered by creation date ascending
         .toSorted(({created: d1}, {created: d2}) => d1.getTime() - d2.getTime())
         .forEach((rev, i, revs) => {
           const revisionKey = `${this.projID()} ${id} ${i}`;
           const allAuthorIDs = rev.authors
-            .map(author => this.usernameToID.get(author.email === undefined
+            .map(author => this.detailsToID.get(author.email === undefined
               ? `${realNameDomain} ${author.name}`
               : `${emailDomain} ${author.email}`)!);
           this.db.proposal_revision.set(revisionKey, {
@@ -90,24 +105,24 @@ export class NEPPersister extends Persister<NEP> {
           //   });
           // }
           if(i === 0 || rev.status !== revs[i-1].status) {
-            this.db.stage_history.set(revisionKey, {
+            this.db.proposal_status.set(revisionKey, {
               project_id: proposal.project_id,
               proposal_id: proposal.proposal_id,
               proposal,
-              stage_index,
+              status_index,
               normalised_status: this.normalizeStatus(rev.status),
               raw_status: rev.status,
               created_at: rev.created.toISOString(),
             });
-            stage_index++;
+            status_index++;
           }
         });
 
       for(const comment of nep.comments) {
         const author = this.db.person.get(
-          this.usernameToID.get(isGithubComment(comment)
-            ? `${githubDomain} ${comment.author.login}`
-            : `${emailDomain} ${comment.author.email}`)!
+          this.detailsToID.get(isGithubComment(comment)
+            ? `${githubDomain} username ${comment.author.login}`
+            : `${emailDomain} email ${comment.author.email}`)!
         )!;
         const newID = commentToID.get(comment.id)!;
         this.db.comment.set(newID, {

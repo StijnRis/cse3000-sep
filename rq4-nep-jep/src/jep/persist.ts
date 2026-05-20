@@ -23,7 +23,7 @@ export class JEPPersister extends Persister<JEP> {
       'Completed': 'accepted',
       'Withdrawn': 'withdrawn',
       'Rejected': 'rejected',
-      'Active': 'active',
+      'Active': 'accepted',
       'Closed / Delivered': 'accepted',
       'Closed / Withdrawn': 'withdrawn',
       'Proposed to Target': 'accepted',
@@ -34,11 +34,20 @@ export class JEPPersister extends Persister<JEP> {
 
   persistPeople(jeps: JEP[]) {
     for(const jep of sortedBy(jeps, j => j.id)) {
-      if(jep.owner) this.addPerson(jep.owner.username, jep.owner.name, openjdkDomain);
-      for(const author of sortedBy(jep.authors, a => a))
-        this.addPerson(author, author, realNameDomain); //authors are only listed by name
-      for(const comment of sortedBy(jep.comments, c => c.id))
-        this.addPerson(comment.author.username, comment.author.name, openjdkDomain);
+      if(jep.owner) {
+        const {person_id} = this.ensurePerson(openjdkDomain, 'username', jep.owner.username, jep.owner.name);
+        this.addPersonDetails(person_id, openjdkDomain, 'username', jep.owner.username);
+        this.addPersonDetails(person_id, openjdkDomain, 'display_name', jep.owner.name);
+      }
+      for(const author of sortedBy(jep.authors, a => a)) {
+        const {person_id} = this.ensurePerson(openjdkDomain, 'display_name', author, author);
+        this.addPersonDetails(person_id, openjdkDomain, 'display_name', author); //authors are only listed by name
+      }
+      for(const comment of sortedBy(jep.comments, c => c.id)) {
+        const {person_id} = this.ensurePerson(openjdkDomain, 'username', comment.author.username, comment.author.name);
+        this.addPersonDetails(person_id, openjdkDomain, 'username', comment.author.username);
+        this.addPersonDetails(person_id, openjdkDomain, 'display_name', comment.author.name);
+      }
     }
   }
   persistSEPs(jeps: JEP[]) {
@@ -57,7 +66,7 @@ export class JEPPersister extends Persister<JEP> {
       group.forEach((jep, idx) => {
         const revisionKey = `${this.projID()} ${id} ${idx}`;
         const allAuthorIDs = new Set(jep.authors
-            .map(name => this.usernameToID.get(`${realNameDomain} ${name}`)!));
+            .map(name => this.detailsToID.get(`${realNameDomain} ${name}`)!));
         this.db.proposal_revision.set(revisionKey, {
           project_id: proposal.project_id,
           proposal_id: proposal.proposal_id,
@@ -78,18 +87,18 @@ export class JEPPersister extends Persister<JEP> {
         //   });
         // }
         // TODO rework JEP stage history logic
-        this.db.stage_history.set(revisionKey, {
+        this.db.proposal_status.set(revisionKey, {
           project_id: proposal.project_id,
           proposal_id: proposal.proposal_id,
           proposal,
-          stage_index: idx,
+          status_index: idx,
           normalised_status: this.normalizeStatus(jep.status),
           raw_status: jep.status,
           created_at: jep.created.toISOString(),
         });
         for(const comment of sortedBy(jep.comments, c => c.id)) {
           const newID = this.generateNumID(this.db.comment.size);
-          const author = this.db.person.get(this.usernameToID.get(`${openjdkDomain} ${comment.author.username}`)!)!;
+          const author = this.db.person.get(this.detailsToID.get(`${openjdkDomain} username ${comment.author.username}`)!)!;
           this.db.comment.set(newID, {
             comment_id: newID,
             author_id: author.person_id,

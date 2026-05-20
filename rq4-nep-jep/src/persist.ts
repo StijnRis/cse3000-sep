@@ -17,12 +17,12 @@ export class ProjectSQL {
 class PersonSQL {
   @PrimaryColumn({type: 'integer'})
   person_id: number;
-  @Column({type: 'text'})
-  full_name: string;
+  @Column({type: 'text', nullable: true})
+  full_name?: string;
 };
 
-@Entity('PersonUsername')
-class PersonUsernameSQL {
+@Entity('PersonIdentifier')
+class PersonIdentifierSQL {
   @PrimaryColumn({type: 'integer'})
   person_id: number;
   @ManyToOne(() => PersonSQL) @JoinColumn({name: 'person_id', referencedColumnName: 'person_id'})
@@ -30,7 +30,9 @@ class PersonUsernameSQL {
   @PrimaryColumn({type: 'text'})
   domain: string;
   @PrimaryColumn({type: 'text'})
-  username: string;
+  identifier_type: 'email' | 'username' | 'display_name';
+  @PrimaryColumn({type: 'text'})
+  identifier: string;
 };
 
 @Entity('Proposal')
@@ -80,8 +82,8 @@ class ProposalRevisionSQL {
   authors: PersonSQL[];
 };
 
-@Entity('StageHistory')
-class StageHistorySQL {
+@Entity('ProposalStatus')
+class ProposalStatusSQL {
   @PrimaryColumn({type: 'integer'})
   project_id: number;
   @PrimaryColumn({type: 'text'})
@@ -92,9 +94,9 @@ class StageHistorySQL {
   ])
   proposal: ProposalSQL; //fk'
   @PrimaryColumn({type: 'integer'})
-  stage_index: number;
+  status_index: number;
   @Column({type: 'text'})
-  normalised_status: 'accepted' | 'rejected' | 'draft' | 'review' | 'withdrawn' | 'superseded' | 'provisional' | 'active' | 'unknown';
+  normalised_status: 'accepted' | 'rejected' | 'draft' | 'review' | 'withdrawn' | 'superseded' | 'unknown';
   @Column({type: 'text', nullable: true})
   raw_status?: string;
   @Column({type: 'datetime'})
@@ -165,10 +167,10 @@ class Database {
   project = new Map<number/*project_id*/, ProjectSQL>();
   person = new Map<number/*person_id*/, PersonSQL>();
   // combining values into string as a hack, because arrays don't have proper equals functionality
-  person_username = new Map<string/*person_id domain username*/, PersonUsernameSQL>();
+  person_identifier = new Map<string/*person_id domain identifier_type identifier*/, PersonIdentifierSQL>();
   proposal = new Map<string/*project_id proposal_id*/, ProposalSQL>();
   proposal_revision = new Map<string/*project_id proposal_id revision_index*/, ProposalRevisionSQL>();
-  stage_history = new Map<string/*project_id proposal_id stage_index*/, StageHistorySQL>();
+  proposal_status = new Map<string/*project_id proposal_id stage_index*/, ProposalStatusSQL>();
   related_proposal: RelatedProposalSQL[] = [];
   comment = new Map<number/*comment_id*/, CommentSQL>();
 }
@@ -193,22 +195,40 @@ export abstract class Persister<SEP_T> {
    */
   generateNumID(id: number) {return this.projID() * 1000000 + id;}
 
-  usernameToID = new Map<string/*domain username*/, number>();
-  addPerson(username: string, name: string, domain: string) {
-    const key = `${domain} ${username}`;
-    if(this.usernameToID.has(key)) return;
-    const newID = this.generateNumID(this.usernameToID.size);
-    this.usernameToID.set(key, newID);
-    const person: PersonSQL = {
-      person_id: newID,
-      full_name: name,
-    };
-    this.db.person.set(newID, person);
-    this.db.person_username.set(`${newID} ${domain} ${username}`, {
-      person_id: person.person_id,
+  detailsToID = new Map<string/*domain identifier_type identifier*/, number>();
+  /**
+   * Gets person entity for given details. Creates person if doesn't exist. Does not persist identifiers
+   * Updates full_name if specified
+   * @param domain 
+   * @param identifier_type 
+   * @param identifier 
+   * @param full_name 
+   * @returns person
+   */
+  ensurePerson(domain: string, identifier_type: PersonIdentifierSQL['identifier_type'], identifier: string, full_name?: string): PersonSQL {
+    const key = `${domain} ${identifier_type} ${identifier}`;
+    const existID = this.detailsToID.get(key);
+    let person: PersonSQL;
+    if(existID !== undefined) {
+      if(full_name !== undefined)
+        this.db.person.set(existID, { person_id: existID, full_name });
+      person = this.db.person.get(existID)!;
+    } else {
+      const newID = this.generateNumID(this.detailsToID.size);
+      this.detailsToID.set(key, newID);
+      person = { person_id: newID, full_name };
+      this.db.person.set(newID, person);
+    }
+    return person;
+  }
+  addPersonDetails(person_id: number, domain: string, identifier_type: PersonIdentifierSQL['identifier_type'], identifier: string) {
+    const person = this.db.person.get(person_id)!;
+    this.db.person_identifier.set(`${person_id} ${domain} ${identifier_type} ${identifier}`, {
+      person_id,
       person,
       domain,
-      username,
+      identifier_type,
+      identifier,
     });
   }
 
@@ -216,7 +236,7 @@ export abstract class Persister<SEP_T> {
    * Implementations should come up with their own translation schemes
    * @param status raw status
    */
-  abstract normalizeStatus(status: string | undefined): StageHistorySQL['normalised_status'];
+  abstract normalizeStatus(status: string | undefined): ProposalStatusSQL['normalised_status'];
 
   abstract persistPeople(seps: SEP_T[]): void;
   abstract persistSEPs(seps: SEP_T[]): void;
@@ -246,7 +266,7 @@ export const dataSource = async (database: string, dropSchema: boolean): Promise
   await new DataSource({
     type: 'sqlite',
     database,
-    entities: [ProjectSQL, PersonSQL, PersonUsernameSQL, ProposalSQL, ProposalRevisionSQL, StageHistorySQL, RelatedProposalSQL, CommentSQL],
+    entities: [ProjectSQL, PersonSQL, PersonIdentifierSQL, ProposalSQL, ProposalRevisionSQL, ProposalStatusSQL, RelatedProposalSQL, CommentSQL],
     synchronize: true,
     dropSchema,
     // logging: true,
@@ -260,10 +280,10 @@ export const dataSource = async (database: string, dropSchema: boolean): Promise
 export const dumpDatabase = async (dataSource: DataSource, db: Database) => {
   await dataSource.getRepository(ProjectSQL).save(db.project.values().toArray());
   await dataSource.getRepository(PersonSQL).save(db.person.values().toArray());
-  await dataSource.getRepository(PersonUsernameSQL).save(db.person_username.values().toArray());
+  await dataSource.getRepository(PersonIdentifierSQL).save(db.person_identifier.values().toArray());
   await dataSource.getRepository(ProposalSQL).save(db.proposal.values().toArray());
   await dataSource.getRepository(ProposalRevisionSQL).save(db.proposal_revision.values().toArray());
-  await dataSource.getRepository(StageHistorySQL).save(db.stage_history.values().toArray());
+  await dataSource.getRepository(ProposalStatusSQL).save(db.proposal_status.values().toArray());
   await dataSource.getRepository(RelatedProposalSQL).save(db.related_proposal);
   await dataSource.getRepository(CommentSQL).save(db.comment.values().toArray());
 };
