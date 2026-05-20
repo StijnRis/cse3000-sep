@@ -28,25 +28,32 @@ export class NEPPersister extends Persister<NEP> {
   }
 
   persistPeople(neps: NEP[]) {
+    const numpyOrgID = this.generateNumID(0);
+    const numpyOrg = {
+      organisation_id: numpyOrgID,
+      organisation_name: 'NumPy',
+    };
+    this.db.organisation.set(numpyOrgID, numpyOrg);
+
     for(const nep of sortedBy(neps, n => n.id)) {
       for(const rev of sortedBy(nep.revisions, r => r.created.getDate()))
         for(const author of sortedBy(rev.authors, a => a.name)) {
-          let person_id: number;
+          let person_id;
           if(author.email !== undefined) {
-            person_id = this.ensurePerson(numpyDomain, 'email', author.email, author.name).person_id;
+            person_id = this.ensurePerson(numpyDomain, 'email', author.email, author.name, [numpyOrg]).person_id;
             this.addPersonDetails(person_id, numpyDomain, 'email', author.email);
           } else {
-            person_id = this.ensurePerson(numpyDomain, 'display_name', author.name, author.name).person_id;
+            person_id = this.ensurePerson(numpyDomain, 'display_name', author.name, author.name, [numpyOrg]).person_id;
           }
           this.addPersonDetails(person_id, numpyDomain, 'display_name', author.name);
         }
       for(const comment of sortedBy(nep.comments, c => c.id)) {
         if(isGithubComment(comment)) {
-          const {person_id} = this.ensurePerson(githubDomain, 'username', comment.author.login, comment.author.name);
+          const {person_id} = this.ensurePerson(githubDomain, 'username', comment.author.login, comment.author.name); // github commenters may not be affiliated with numpy I guess
           this.addPersonDetails(person_id, githubDomain, 'username', comment.author.login);
           this.addPersonDetails(person_id, githubDomain, 'display_name', comment.author.name);
         } else {
-          const {person_id} = this.ensurePerson(emailDomain, 'email', comment.author.email, comment.author.name);
+          const {person_id} = this.ensurePerson(emailDomain, 'email', comment.author.email, comment.author.name, [numpyOrg]);
           this.addPersonDetails(person_id, emailDomain, 'email', comment.author.email);
           this.addPersonDetails(person_id, emailDomain, 'display_name', comment.author.name);
         }

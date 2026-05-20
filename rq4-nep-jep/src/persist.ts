@@ -19,6 +19,12 @@ class PersonSQL {
   person_id: number;
   @Column({type: 'text', nullable: true})
   full_name?: string;
+  @ManyToMany(() => OrganisationSQL) @JoinTable({
+    name: 'Affiliation',
+    joinColumn: {name: 'person_id', referencedColumnName: 'person_id'},
+    inverseJoinColumn: {name: 'organisation_id', referencedColumnName: 'organisation_id'},
+  })
+  affiliations: OrganisationSQL[];
 };
 
 @Entity('PersonIdentifier')
@@ -34,6 +40,14 @@ class PersonIdentifierSQL {
   @PrimaryColumn({type: 'text'})
   identifier: string;
 };
+
+@Entity('Organisation')
+class OrganisationSQL {
+  @PrimaryColumn({type: 'integer'})
+  organisation_id: number;
+  @Column({type: 'text'})
+  organisation_name: string;
+}
 
 @Entity('Proposal')
 class ProposalSQL {
@@ -165,6 +179,7 @@ class CommentSQL {
 
 class Database {
   project = new Map<number/*project_id*/, ProjectSQL>();
+  organisation = new Map<number, OrganisationSQL>();
   person = new Map<number/*person_id*/, PersonSQL>();
   // combining values into string as a hack, because arrays don't have proper equals functionality
   person_identifier = new Map<string/*person_id domain identifier_type identifier*/, PersonIdentifierSQL>();
@@ -198,25 +213,34 @@ export abstract class Persister<SEP_T> {
   personDetailsToID = new Map<string/*domain identifier_type identifier*/, number>();
   /**
    * Gets person entity for given details. Creates person if doesn't exist. Does not persist identifiers
-   * Updates full_name if specified
+   * Updates full_name and affiliations if specified
    * @param domain 
    * @param identifier_type 
    * @param identifier 
    * @param full_name 
+   * @param affiliations
    * @returns person
    */
-  ensurePerson(domain: string, identifier_type: PersonIdentifierSQL['identifier_type'], identifier: string, full_name?: string): PersonSQL {
+  ensurePerson(
+    domain: string, identifier_type: PersonIdentifierSQL['identifier_type'], identifier: string,
+    full_name?: string, affiliations?: OrganisationSQL[],
+  ): PersonSQL {
     const key = `${domain} ${identifier_type} ${identifier}`;
     const existID = this.personDetailsToID.get(key);
     let person: PersonSQL;
     if(existID !== undefined) {
-      if(full_name !== undefined)
-        this.db.person.set(existID, { person_id: existID, full_name });
       person = this.db.person.get(existID)!;
+      if(full_name !== undefined) person.full_name = full_name;
+      if(affiliations !== undefined) person.affiliations = affiliations;
+      this.db.person.set(existID, person);
     } else {
       const newID = this.generateNumID(this.personDetailsToID.size);
       this.personDetailsToID.set(key, newID);
-      person = { person_id: newID, full_name };
+      person = {
+        person_id: newID,
+        full_name,
+        affiliations: affiliations || [],
+      };
       this.db.person.set(newID, person);
     }
     return person;
@@ -266,7 +290,7 @@ export const dataSource = async (database: string, dropSchema: boolean): Promise
   await new DataSource({
     type: 'sqlite',
     database,
-    entities: [ProjectSQL, PersonSQL, PersonIdentifierSQL, ProposalSQL, ProposalRevisionSQL, ProposalStatusSQL, RelatedProposalSQL, CommentSQL],
+    entities: [ProjectSQL, OrganisationSQL, PersonSQL, PersonIdentifierSQL, ProposalSQL, ProposalRevisionSQL, ProposalStatusSQL, RelatedProposalSQL, CommentSQL],
     synchronize: true,
     dropSchema,
     // logging: true,
@@ -279,6 +303,7 @@ export const dataSource = async (database: string, dropSchema: boolean): Promise
  */
 export const dumpDatabase = async (dataSource: DataSource, db: Database) => {
   await dataSource.getRepository(ProjectSQL).save(db.project.values().toArray());
+  await dataSource.getRepository(OrganisationSQL).save(db.organisation.values().toArray());
   await dataSource.getRepository(PersonSQL).save(db.person.values().toArray());
   await dataSource.getRepository(PersonIdentifierSQL).save(db.person_identifier.values().toArray());
   await dataSource.getRepository(ProposalSQL).save(db.proposal.values().toArray());

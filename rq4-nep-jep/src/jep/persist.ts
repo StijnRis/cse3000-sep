@@ -33,18 +33,25 @@ export class JEPPersister extends Persister<JEP> {
   }
 
   persistPeople(jeps: JEP[]) {
+    const openjdkOrgID = this.generateNumID(0);
+    const openjdkOrg = {
+      organisation_id: openjdkOrgID,
+      organisation_name: 'OpenJDK'
+    };
+    this.db.organisation.set(openjdkOrgID, openjdkOrg);
+
     for(const jep of sortedBy(jeps, j => j.id)) {
       if(jep.owner) {
-        const {person_id} = this.ensurePerson(openjdkDomain, 'username', jep.owner.username, jep.owner.name);
+        const {person_id} = this.ensurePerson(openjdkDomain, 'username', jep.owner.username, jep.owner.name, [openjdkOrg]);
         this.addPersonDetails(person_id, openjdkDomain, 'username', jep.owner.username);
         this.addPersonDetails(person_id, openjdkDomain, 'display_name', jep.owner.name);
       }
       for(const author of sortedBy(jep.authors, a => a)) {
-        const {person_id} = this.ensurePerson(openjdkDomain, 'display_name', author, author);
+        const {person_id} = this.ensurePerson(openjdkDomain, 'display_name', author, author, [openjdkOrg]);
         this.addPersonDetails(person_id, openjdkDomain, 'display_name', author); //authors are only listed by name
       }
       for(const comment of sortedBy(jep.comments, c => c.id)) {
-        const {person_id} = this.ensurePerson(openjdkDomain, 'username', comment.author.username, comment.author.name);
+        const {person_id} = this.ensurePerson(openjdkDomain, 'username', comment.author.username, comment.author.name, [openjdkOrg]);
         this.addPersonDetails(person_id, openjdkDomain, 'username', comment.author.username);
         this.addPersonDetails(person_id, openjdkDomain, 'display_name', comment.author.name);
       }
