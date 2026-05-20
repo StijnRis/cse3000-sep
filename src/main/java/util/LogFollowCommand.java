@@ -77,7 +77,7 @@ public class LogFollowCommand {
                     commits.add(commit);
                     paths.put(commit.getId(), path);
 
-                    Log.oLog("RFC Parsing - GitReader: Traversing commit " + commit.getName());
+                    Log.oLog("GitReader: Traversing commit " + commit.getName());
                 }
             }
             if (start == null) return commits;
@@ -126,7 +126,7 @@ public class LogFollowCommand {
             List<DiffEntry> files = rd.compute();
             for (DiffEntry diffEntry : files) {
                 if ((diffEntry.getChangeType() == DiffEntry.ChangeType.RENAME || diffEntry.getChangeType() == DiffEntry.ChangeType.COPY) && diffEntry.getNewPath().contains(path)) {
-                    Log.log("RFC Parsing - GitReader: Path change " + diffEntry.toString());
+                    Log.log("GitReader: Path change " + diffEntry.toString());
                     return diffEntry.getOldPath();
                 }
             }

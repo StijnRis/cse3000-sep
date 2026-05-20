@@ -1,6 +1,7 @@
 package scraper.parser;
 
 import lombok.Getter;
+import lombok.Setter;
 import org.eclipse.jgit.lib.Repository;
 import org.eclipse.jgit.storage.file.FileRepositoryBuilder;
 import org.hibernate.Session;
@@ -26,6 +27,7 @@ public abstract class DataReader {
     protected List<ProposalRevisionAuthor> revisionAuthors = new ArrayList<>();
 
     @Getter
+    @Setter
     protected int authorIndex; //Assigned project id * 1 million
 
     protected final Session session;

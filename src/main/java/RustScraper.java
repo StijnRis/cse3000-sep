@@ -63,6 +63,22 @@ public class RustScraper {
         Log.log("Exiting");
     }
 
+    /**
+     * For Swift Evolutions, each proposal has a file in the repository, and Pull Requests are revisions of said proposals, with their own discussions.
+     * This makes the reverse approach of how scraping the Rust RFC repository initially seem better.
+     * However, multiple commits can be in one PR, with a batch of commits being a new revision.
+     * Thus we also probably shouldn't use a commit as a revision...
+     *
+     * Unfortunately, there is still a small fraction of rejected proposals that are never merged into the repository (the exception to the rule).
+     *
+     * Method:
+     * Git History: Get File -> Extract identifier -> Create proposal
+     * GitHub: Get PR -> Check what file changed -> Extract identifier (e.g. SE-XXXX) -> Retrieve discussions
+     *
+     *
+     * While one could get commit and file content from GitHub too in the first step, this would result in many more api calls.
+     * With the data also available in the git repository, this is preferred in my opinion, and only is a little more processing work.
+     */
     private static void scrapeSwift(String rootFolder, String cacheFolder, Session s) throws Exception {
         Log.log("Swift: Started");
         String gitRootFolder = rootFolder + "swift-evolution/";
@@ -83,6 +99,12 @@ public class RustScraper {
         scrapeGitFiles(s, sdr);
     }
 
+    /**
+     * For Rust RFCs, Pull Requests are the initial proposal on which discussion happens.
+     * Commits are revisions of said proposal, but discussion remains on the same PR.
+     * Once finalized and accepted, it is then merged in the repository file structure.
+     * A rejected proposal is never entered into the repository.
+     */
     private static void scrapeRust(String rootFolder, String cacheFolder, Session s) throws Exception {
         Log.log("Rust: Started");
         String gitRootFolder = rootFolder + "rfcs/";

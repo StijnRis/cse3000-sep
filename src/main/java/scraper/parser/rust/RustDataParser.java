@@ -14,6 +14,7 @@ import scraper.data.proposal.revision.ProposalRevisionAuthor;
 import scraper.data.proposal.revision.ProposalRevisionAuthorId;
 import scraper.data.proposal.revision.ProposalRevisionId;
 import scraper.parser.GitReader;
+import util.Log;
 
 import java.io.IOException;
 import java.sql.Date;
@@ -52,6 +53,8 @@ public class RustDataParser {
      * Creates a list of all proposal revisions, treating every commit to the file history as a separate revision.
      */
     public List<ProposalRevision> createRevisionHistory() throws Exception {
+        Log.log("RFC Parser: Creating revisions for " + proposal.getId().getProposalId());
+
         List<RevCommit> commits = gitReader.readProjectGitInternal();
 
         String[] pathSplit = gitReader.getLastPath().split("/");

@@ -135,6 +135,7 @@ public class RustDataReader extends DataReader {
                 null,
                 featureName,
                 "?",
+                "",
                 null,
                 ""
         );
