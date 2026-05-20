@@ -83,7 +83,7 @@ export class NEPPersister extends Persister<NEP> {
         .forEach((rev, i, revs) => {
           const revisionKey = `${this.projID()} ${id} ${i}`;
           const allAuthorIDs = rev.authors
-            .map(author => this.detailsToID.get(author.email === undefined
+            .map(author => this.personDetailsToID.get(author.email === undefined
               ? `${realNameDomain} ${author.name}`
               : `${emailDomain} ${author.email}`)!);
           this.db.proposal_revision.set(revisionKey, {
@@ -120,7 +120,7 @@ export class NEPPersister extends Persister<NEP> {
 
       for(const comment of nep.comments) {
         const author = this.db.person.get(
-          this.detailsToID.get(isGithubComment(comment)
+          this.personDetailsToID.get(isGithubComment(comment)
             ? `${githubDomain} username ${comment.author.login}`
             : `${emailDomain} email ${comment.author.email}`)!
         )!;

@@ -66,7 +66,7 @@ export class JEPPersister extends Persister<JEP> {
       group.forEach((jep, idx) => {
         const revisionKey = `${this.projID()} ${id} ${idx}`;
         const allAuthorIDs = new Set(jep.authors
-            .map(name => this.detailsToID.get(`${realNameDomain} ${name}`)!));
+            .map(name => this.personDetailsToID.get(`${realNameDomain} ${name}`)!));
         this.db.proposal_revision.set(revisionKey, {
           project_id: proposal.project_id,
           proposal_id: proposal.proposal_id,
@@ -98,7 +98,7 @@ export class JEPPersister extends Persister<JEP> {
         });
         for(const comment of sortedBy(jep.comments, c => c.id)) {
           const newID = this.generateNumID(this.db.comment.size);
-          const author = this.db.person.get(this.detailsToID.get(`${openjdkDomain} username ${comment.author.username}`)!)!;
+          const author = this.db.person.get(this.personDetailsToID.get(`${openjdkDomain} username ${comment.author.username}`)!)!;
           this.db.comment.set(newID, {
             comment_id: newID,
             author_id: author.person_id,

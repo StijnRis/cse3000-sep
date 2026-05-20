@@ -195,7 +195,7 @@ export abstract class Persister<SEP_T> {
    */
   generateNumID(id: number) {return this.projID() * 1000000 + id;}
 
-  detailsToID = new Map<string/*domain identifier_type identifier*/, number>();
+  personDetailsToID = new Map<string/*domain identifier_type identifier*/, number>();
   /**
    * Gets person entity for given details. Creates person if doesn't exist. Does not persist identifiers
    * Updates full_name if specified
@@ -207,15 +207,15 @@ export abstract class Persister<SEP_T> {
    */
   ensurePerson(domain: string, identifier_type: PersonIdentifierSQL['identifier_type'], identifier: string, full_name?: string): PersonSQL {
     const key = `${domain} ${identifier_type} ${identifier}`;
-    const existID = this.detailsToID.get(key);
+    const existID = this.personDetailsToID.get(key);
     let person: PersonSQL;
     if(existID !== undefined) {
       if(full_name !== undefined)
         this.db.person.set(existID, { person_id: existID, full_name });
       person = this.db.person.get(existID)!;
     } else {
-      const newID = this.generateNumID(this.detailsToID.size);
-      this.detailsToID.set(key, newID);
+      const newID = this.generateNumID(this.personDetailsToID.size);
+      this.personDetailsToID.set(key, newID);
       person = { person_id: newID, full_name };
       this.db.person.set(newID, person);
     }
