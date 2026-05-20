@@ -1,2 +1,14 @@
-# Empty file to allow directory creation.
-# Scraper to be added later
+data/
+*.db
+.env
+
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
