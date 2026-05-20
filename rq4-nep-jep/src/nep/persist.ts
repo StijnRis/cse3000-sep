@@ -100,6 +100,7 @@ export class NEPPersister extends Persister<NEP> {
             revision_index: i,
             title: nep.title,
             created_at: rev.created.toISOString(),
+            implemented_at_version: rev.version,
             content: rev.content,
             authors: allAuthorIDs.map(id => this.db.person.get(id)!),
           });
