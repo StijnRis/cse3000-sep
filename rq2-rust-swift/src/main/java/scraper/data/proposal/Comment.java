@@ -1,0 +1,52 @@
+package scraper.data.proposal;
+
+import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import org.hibernate.annotations.OnDelete;
+import org.hibernate.annotations.OnDeleteAction;
+import scraper.data.author.Person;
+
+import java.sql.Date;
+
+@Getter
+@Setter
+@Entity
+@NoArgsConstructor
+@AllArgsConstructor
+@Table(name = "Comment")
+public class Comment {
+    @Id
+    @Column(name = "comment_id", nullable = false)
+    private Integer id;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @OnDelete(action = OnDeleteAction.RESTRICT)
+    @JoinColumn(name = "author_id")
+    private Person author;
+
+    @JoinColumns({
+            @JoinColumn(name = "project_id",
+                    referencedColumnName = "project_id"),
+            @JoinColumn(name = "proposal_id",
+                    referencedColumnName = "proposal_id")})
+    @ManyToOne(fetch = FetchType.LAZY)
+    @OnDelete(action = OnDeleteAction.RESTRICT)
+    private Proposal proposal;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @OnDelete(action = OnDeleteAction.RESTRICT)
+    @JoinColumn(name = "comment_on_comment_id")
+    private Comment commentOnComment;
+
+    @Column(name = "created_at")
+    private Date createdAt;
+
+    @Lob
+    @Column(name = "content", nullable = false)
+    private String content;
+
+
+}
