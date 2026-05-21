@@ -42,6 +42,7 @@ export type NEPRevision = {
   authors: NEPAuthor[],
   status: NEPStatus,
   created: Date,
+  version?: string,
   content: string,
 };
 export type NEP = SEP<NEPType, NEPComment> & {
@@ -87,8 +88,11 @@ const collectNEPRevisions = async (strID: string, cacheDir: string): Promise<NEP
         .map(a => ({name: a.replace(/ <.*>$/, ''), email: a.match(/ <(.*)>$/)?.[1]})),
       status: lines.find(l => l.startsWith(':Status:'))?.replace(':Status:', '').trim() as NEPStatus,
       created,
-      content: lines.filter(l => l.trim() !== '' && !l.match(/^:[A-Za-z]*:/))
-        .join('\n'),
+      version: lines.find(l => l.startsWith(':NumPy-Version:'))?.replace(':NumPy-Version:', '').trim(),
+      content: lines.filter(l =>
+        l.trim() !== '' && // no empty lines
+        !l.match(/^:[A-Za-z]*:/) // no headers 
+      ).join('\n'),
     };
   });
 };
