@@ -1,8 +1,13 @@
 # Environment Variables
 
+Set these on your machine or in a `.env` file
+
 ```bash
+# For scraping:
 GITHUB_TOKEN # auth token for github API
 GITHUB_API_VERSION # version of github API (see github docs for format)
+# For analysis:
+COMMON_DB_FILE # SQL database file from which to read SEP data
 ```
 
 # Setup
@@ -15,6 +20,8 @@ uv sync
 ```
 
 # Running scrapers
+
+After setting [environment variables](#environment-variables):
 
 ```bash
 #Scraping JEP:
@@ -56,4 +63,4 @@ Leaving out the `new-db` flag will cause the new data to be appended, and may ca
 
 # Running analysis
 
-The notebook `analysis.ipynb` contains all the analysis scripts. After syncing uv, set the environment to the `.venv` folder. Then you can run cells. There may be dependencies from later cells to earlier cells.
+The notebook `analysis.ipynb` contains all the analysis scripts. Set your [environment variables](#environment-variables) accordingly. After syncing uv, set the Python environment to the `.venv` folder. Then you can run cells. There may be dependencies from later cells to earlier cells.
