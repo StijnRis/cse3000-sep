@@ -11,7 +11,6 @@ import org.hibernate.annotations.OnDelete;
 import org.hibernate.annotations.OnDeleteAction;
 
 import java.sql.Date;
-import java.time.Instant;
 
 @Getter
 @Setter
@@ -47,23 +46,14 @@ public class StageHistory {
     @Column(name = "created_at", nullable = false)
     private Date createdAt;
 
-    public static StageHistory create(Session session, Proposal proposal, int stageIndex, String rawStatus, Date createdAt) {
+    public static StageHistory create(Session session, Proposal proposal, int stageIndex, String rawStatus, NormalizedStatus status, Date createdAt) {
         StageHistoryId shId = new StageHistoryId(proposal.getProject().getId(), proposal.getId().getProposalId(), stageIndex);
-        StageHistory sh = new StageHistory(shId, proposal, mapStatus(rawStatus), rawStatus, createdAt);
+        StageHistory sh = new StageHistory(shId, proposal, status, rawStatus, createdAt);
 
         Transaction tx = session.beginTransaction();
         session.persist(sh);
         tx.commit();
 
         return sh;
-    }
-
-    private static NormalizedStatus mapStatus(String status) {
-        return switch(status) {
-            case "created", "open" -> NormalizedStatus.active;
-            case "merged" -> NormalizedStatus.accepted;
-            case "closed" -> NormalizedStatus.rejected;
-            default -> NormalizedStatus.unknown;
-        };
     }
 }

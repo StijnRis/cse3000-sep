@@ -5,6 +5,7 @@ import org.hibernate.Session;
 import scraper.data.Project;
 import scraper.data.author.Person;
 import scraper.data.proposal.Comment;
+import scraper.data.proposal.NormalizedStatus;
 import scraper.data.proposal.Proposal;
 import scraper.data.proposal.StageHistory;
 import scraper.data.proposal.revision.ProposalRevision;
@@ -20,12 +21,9 @@ import java.sql.Date;
 import java.util.*;
 
 public class RustRepoReader extends RepoReader {
-    private static final String OWNER = "rust-lang";
-    private static final String REPO = "rfcs";
-
 
     public RustRepoReader(Session session, String authToken, String cacheDir, boolean ignoreCached, Project project, int authorIndex) throws IOException {
-        super(session, authToken, cacheDir, ignoreCached, project, authorIndex);
+        super(session, "rust-lang", "rfcs", authToken, cacheDir, ignoreCached, project, authorIndex);
 
         commentIndex = 5000000;
         organisationIndex = 5000000;
@@ -49,7 +47,7 @@ public class RustRepoReader extends RepoReader {
                 String id = String.format("%04d", pr.getNumber());
 
 
-                proposal = Proposal.create(session, project, id, author, pr.getTitle(), "", pr, pr.getHead().getSha());
+                proposal = Proposal.create(session, project, id, author, pr.getTitle(), "", "", List.of(pr), pr.getHead().getSha());
                 proposals.add(proposal);
 
                 createStageHistory(pr, proposal);
@@ -59,45 +57,12 @@ public class RustRepoReader extends RepoReader {
                 commentIndex++;
                 comments.add(prComment);
 
-                Log.oLog("GitHub Scraping: Grabbing Conversations");
-                List<GitHubService.Conversation> conversations = getConversationFromAPI(OWNER, REPO, pr);
-
-                //Make sure in order.
-                Comment lastComment = prComment;
-                for (int i = 0; i < conversations.size(); i++) {
-                    GitHubService.Conversation conv = conversations.get(i);
-
-                    Comment newComment = new Comment(commentIndex,
-                            getOrCreateAuthor(conv.getUser()),
-                            proposal,
-                            lastComment,
-                            conv.getCreated_at(),
-                            conv.getBody() != null ? conv.getBody() : ""
-                    );
-                    commentIndex++;
-                    comments.add(newComment);
-                    lastComment = newComment;
-                }
-
-                Log.oLog("GitHub Scraping: Grabbing Review Comments");
-                List<GitHubService.ReviewComment> revComments = getReviewCommentsFromAPI(OWNER, REPO, pr);
-                HashMap<Integer, Comment> lastCommentAtLine = new HashMap<Integer, Comment>();
-                for(GitHubService.ReviewComment revComment : revComments) {
-                    Comment comment = new Comment(commentIndex,
-                            getOrCreateAuthor(revComment.getUser()),
-                            proposal,
-                            lastCommentAtLine.getOrDefault(revComment.getLine(), prComment),
-                            revComment.getCreated_at(),
-                            revComment.getBody() != null ? revComment.getBody() : ""
-                    );
-                    commentIndex++;
-                    comments.add(comment);
-                    lastCommentAtLine.put(revComment.getLine(), comment);
-                }
+                getCommentsFromPR(pr, proposal, prComment);
+                getReviewComments(pr, proposal, prComment);
 
                 success++;
             } catch (Exception e) {
-                Log.log("GitHub Scraping: Failed on proposal " + proposal.getId().getProposalId());
+                Log.log("GitHub Scraping: Failed on PR " + pr.getNumber());
                 e.printStackTrace();
                 failure++;
             }
@@ -109,10 +74,9 @@ public class RustRepoReader extends RepoReader {
         Log.log(String.format("GitHub Scraping:  %s completed, %s failed. Failure rate: %s", success, failure, r));
     }
 
-    @Override
     public List<ProposalRevision> createRevisionHistory(Proposal proposal) throws IOException {
         List<ProposalRevision> revisions = new ArrayList<>();
-        List<GitHubService.PRCommit> commits = getCommitListFromAPI(OWNER, REPO, proposal.getPullRequest());
+        List<GitHubService.PRCommit> commits = getCommitListFromAPI(OWNER, REPO, proposal.getPullRequests().getFirst());
 
         for (int i = 0; i < commits.size(); i++) {
             try {
@@ -171,12 +135,12 @@ public class RustRepoReader extends RepoReader {
     }
 
     private void createStageHistory(GitHubService.PullRequest pr, Proposal proposal) {
-        StageHistory.create(session, proposal, 0, "created", pr.getCreated_at());
+        StageHistory.create(session, proposal, 0, "created", NormalizedStatus.active, pr.getCreated_at());
 
         if(pr.getMerged_at() != null) {
-            StageHistory.create(session, proposal, 1, "merged", pr.getMerged_at());
+            StageHistory.create(session, proposal, 1, "merged", NormalizedStatus.accepted, pr.getMerged_at());
         } else if(pr.getClosed_at() != null) {
-            StageHistory.create(session, proposal, 1, "closed", pr.getClosed_at());
+            StageHistory.create(session, proposal, 1, "closed", NormalizedStatus.rejected, pr.getClosed_at());
         }
     }
 

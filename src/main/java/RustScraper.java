@@ -7,6 +7,7 @@ import scraper.parser.RepoReader;
 import scraper.parser.rust.RustDataReader;
 import scraper.parser.rust.RustRepoReader;
 import scraper.parser.swift.SwiftDataReader;
+import scraper.parser.swift.SwiftDiscourseReader;
 import scraper.parser.swift.SwiftRepoReader;
 import util.HibernateUtil;
 import util.Log;
@@ -82,20 +83,25 @@ public class RustScraper {
     private static void scrapeSwift(String rootFolder, String cacheFolder, Session s) throws Exception {
         Log.log("Swift: Started");
         String gitRootFolder = rootFolder + "swift-evolution/";
-        Project project = new Project(7, "Swift", "SE", "Apache-2.0");
+        boolean ignoreCache = Boolean.parseBoolean(arguments.getOrDefault("ignorecache", "false"));
+        Project project = new Project(7, "Swift", "", "Apache-2.0");
 
         //Project must already persist in database to prevent references to transient entities.
         persistOne(s, project);
 
-        srr = new SwiftRepoReader(s, arguments.get("token"), cacheFolder,
-                Boolean.parseBoolean(arguments.getOrDefault("ignorecache", "false")),
-                project, 7000000);
+        srr = new SwiftRepoReader(s, arguments.get("token"), cacheFolder, ignoreCache, project, 7000000);
 
-        scrapeGitHubPRs(s, srr);
         downloadRepository(gitRootFolder, "https://github.com/swiftlang/swift-evolution.git");
 
         Log.log("Swift: Building DataReader");
         sdr = new SwiftDataReader(s, project, srr, gitRootFolder, srr.getProposals());
+        sdr.createProposalIndex();
+
+        srr.setSdr(sdr); //I dont like this.
+        srr.setAuthorIndex(sdr.getAuthorIndex());
+        scrapeGitHubPRs(s, srr);
+
+        sdr.setAuthorIndex(srr.getAuthorIndex());
         scrapeGitFiles(s, sdr);
     }
 

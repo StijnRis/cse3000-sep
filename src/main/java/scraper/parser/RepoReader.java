@@ -25,10 +25,13 @@ import util.Log;
 import java.io.*;
 import java.lang.reflect.Type;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Optional;
 
 public abstract class RepoReader {
+    protected final String OWNER;
+    protected final String REPO;
 
     protected GitHubService service;
 
@@ -41,6 +44,7 @@ public abstract class RepoReader {
     @Getter
     @Setter
     protected int authorIndex; //Assigned project id * 1 million
+    @Getter
     protected int commentIndex; //Assigned project id * 1 million
     protected int rateLimit = 1;
     protected int organisationIndex;
@@ -57,8 +61,10 @@ public abstract class RepoReader {
     protected List<Comment> comments = new ArrayList<>();
 
 
-    public RepoReader(Session session, String authToken, String cacheDir, boolean ignoreCached, Project project, int authorIndex) {
+    public RepoReader(Session session, String owner, String repo, String authToken, String cacheDir, boolean ignoreCached, Project project, int authorIndex) {
         this.session = session;
+        this.OWNER = owner;
+        this.REPO = repo;
         this.cacheDir = cacheDir;
         this.ignoreCached = ignoreCached;
         this.project = project;
@@ -70,9 +76,49 @@ public abstract class RepoReader {
 
     public abstract void scrapeGitHubData() throws IOException;
 
-    public abstract List<ProposalRevision> createRevisionHistory(Proposal proposal) throws IOException;
+    //public abstract List<ProposalRevision> createRevisionHistory(Proposal proposal) throws IOException;
 
+    //Discussion and comment extraction
 
+    protected void getCommentsFromPR(GitHubService.PullRequest pr, Proposal proposal, Comment prComment) throws IOException {
+        Log.oLog("GitHub Scraping: Grabbing Conversations");
+        List<GitHubService.Conversation> conversations = getConversationFromAPI(OWNER, REPO, pr);
+
+        //Make sure in order.
+        Comment lastComment = prComment;
+        for (int i = 0; i < conversations.size(); i++) {
+            GitHubService.Conversation conv = conversations.get(i);
+
+            Comment newComment = new Comment(commentIndex,
+                    getOrCreateAuthor(conv.getUser()),
+                    proposal,
+                    lastComment,
+                    conv.getCreated_at(),
+                    conv.getBody() != null ? conv.getBody() : ""
+            );
+            commentIndex++;
+            comments.add(newComment);
+            lastComment = newComment;
+        }
+    }
+
+    protected void getReviewComments(GitHubService.PullRequest pr, Proposal proposal, Comment prComment) throws IOException {
+        Log.oLog("GitHub Scraping: Grabbing Review Comments");
+        List<GitHubService.ReviewComment> revComments = getReviewCommentsFromAPI(OWNER, REPO, pr);
+        HashMap<Integer, Comment> lastCommentAtLine = new HashMap<Integer, Comment>();
+        for(GitHubService.ReviewComment revComment : revComments) {
+            Comment comment = new Comment(commentIndex,
+                    getOrCreateAuthor(revComment.getUser()),
+                    proposal,
+                    lastCommentAtLine.getOrDefault(revComment.getLine(), prComment),
+                    revComment.getCreated_at(),
+                    revComment.getBody() != null ? revComment.getBody() : ""
+            );
+            commentIndex++;
+            comments.add(comment);
+            lastCommentAtLine.put(revComment.getLine(), comment);
+        }
+    }
 
 
     //Discussion related
@@ -131,6 +177,13 @@ public abstract class RepoReader {
 
 
     //Author related
+
+    public Person getOrCreateAuthorFromKnown(String name, String url) throws IOException {
+        String[] splitUrl = url.split("/");
+        String login = splitUrl.length > 1 ? splitUrl[splitUrl.length-1] : "";
+        GitHubService.GitHubUser user = new GitHubService.GitHubUser(login, name, "", "");
+        return getOrCreateAuthor(user);
+    }
 
     protected Person getOrCreateAuthor(GitHubService.GitHubUser user) throws IOException {
         if(user == null) user = new GitHubService.GitHubUser("ghost", null, null, null);
