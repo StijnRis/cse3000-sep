@@ -25,10 +25,10 @@ public class HibernateUtil {
                         Person.class,
                         Organisation.class,
                         Affiliation.class,
-                        PersonUsername.class,
+                        PersonIdentifier.class,
                         Proposal.class,
                         RelatedProposal.class,
-                        StageHistory.class,
+                        ProposalStatus.class,
                         Comment.class,
                         ProposalRevision.class,
                         ProposalRevisionAuthor.class

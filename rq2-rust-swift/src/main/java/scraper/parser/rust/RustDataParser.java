@@ -7,13 +7,14 @@ import org.eclipse.jgit.revwalk.RevCommit;
 import org.hibernate.Session;
 import scraper.data.Project;
 import scraper.data.author.Person;
-import scraper.data.author.PersonUsername;
+import scraper.data.author.PersonIdentifier;
 import scraper.data.proposal.Proposal;
 import scraper.data.proposal.revision.ProposalRevision;
 import scraper.data.proposal.revision.ProposalRevisionAuthor;
 import scraper.data.proposal.revision.ProposalRevisionAuthorId;
 import scraper.data.proposal.revision.ProposalRevisionId;
 import scraper.parser.GitReader;
+import util.Log;
 
 import java.io.IOException;
 import java.sql.Date;
@@ -39,19 +40,21 @@ public class RustDataParser {
 
     public int authorIndex;
 
-    public RustDataParser(Session session, Repository repository, Project project, Proposal proposal, String rootDirPath, String startCommitHash, int authorIndex) throws IOException {
+    public RustDataParser(Session session, Repository repository, Project project, Proposal proposal, String rootDirPath, String startCommitHash, int authorIndex) {
         this.session = session;
         this.project = project;
         this.proposal = proposal;
         this.authorIndex = authorIndex;
 
-        this.gitReader = new GitReader(repository, startCommitHash); //todo efd2744b82ef44ce5359a293f346e4ba0a1a83c7
+        this.gitReader = new GitReader(repository, startCommitHash);
     }
 
     /**
      * Creates a list of all proposal revisions, treating every commit to the file history as a separate revision.
      */
     public List<ProposalRevision> createRevisionHistory() throws Exception {
+        Log.log("RFC Parser: Creating revisions for " + proposal.getId().getProposalId());
+
         List<RevCommit> commits = gitReader.readProjectGitInternal();
 
         String[] pathSplit = gitReader.getLastPath().split("/");
@@ -91,7 +94,7 @@ public class RustDataParser {
     /**
      * Extracts author data from a commit
      */
-    private void extractAuthor(ProposalRevisionId prId, ProposalRevision pr, PersonIdent ident) throws Exception {
+    private void extractAuthor(ProposalRevisionId prId, ProposalRevision pr, PersonIdent ident) {
         Person person = getOrCreateAuthor(ident);
 
         ProposalRevisionAuthorId praId = new ProposalRevisionAuthorId(
@@ -110,13 +113,13 @@ public class RustDataParser {
      */
     private Person getOrCreateAuthor(PersonIdent ident) {
         Optional<Person> author = Person.findAuthorByName(session, ident.getName());
-        if(author.isEmpty()) author = Person.findAuthorByEmail(session, ident.getEmailAddress());
+        if(author.isEmpty()) author = Person.findAuthorByEmail(session, "github.com", ident.getEmailAddress());
 
         if(author.isEmpty()) { //Create new
             Person person = Person.create(session, authorIndex, ident.getName());
             authorIndex++;
 
-            PersonUsername.create(session, person, "email", ident.getEmailAddress());
+            PersonIdentifier.create(session, person, "github.com", "email", ident.getEmailAddress());
             return person;
         } else {
             return author.get();
@@ -126,7 +129,7 @@ public class RustDataParser {
     /**
      * Extract feature name from the first few lines of the markdown file containing the proposal.
      */
-    private String extractDataFromLines(String fileContent) throws Exception {
+    private String extractDataFromLines(String fileContent) {
         Scanner scanner = new Scanner(fileContent);
         String featureName = null;
 
@@ -141,7 +144,7 @@ public class RustDataParser {
             }
 
             //Early break if possible to save time
-            if(lineLC.startsWith("## Summary")) break;
+            if(lineLC.startsWith("## summary")) break;
         }
 
         //Early RFCs did not explicitly contain all fields... or have n/a

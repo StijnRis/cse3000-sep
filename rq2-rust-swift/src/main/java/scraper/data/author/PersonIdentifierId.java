@@ -13,7 +13,7 @@ import java.io.Serializable;
 @AllArgsConstructor
 @EqualsAndHashCode
 @Embeddable
-public class PersonUsernameId implements Serializable {
+public class PersonIdentifierId implements Serializable {
     private static final long serialVersionUID = -9128072950345511870L;
 
     @Column(name = "person_id", nullable = false)
@@ -24,8 +24,10 @@ public class PersonUsernameId implements Serializable {
     private String domain;
 
     @Lob
-    @Column(name = "username", nullable = false)
-    private String username;
+    @Column(name = "identifier_type", nullable = false)
+    private String identifierType;
 
-
+    @Lob
+    @Column(name = "identifier", nullable = false)
+    private String identifier;
 }

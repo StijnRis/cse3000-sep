@@ -2,6 +2,7 @@
     <session-factory>
         <property name="hibernate.connection.driver_class">org.sqlite.JDBC</property>
         <property name="hibernate.dialect">org.hibernate.community.dialect.SQLiteDialect</property>
+        <property name="hibernate.connection.date_class">TEXT</property>
         <property name="show_sql">false</property>
         <property name="hbm2ddl.auto">update</property>
     </session-factory>

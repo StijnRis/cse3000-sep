@@ -11,17 +11,16 @@ import org.hibernate.annotations.OnDelete;
 import org.hibernate.annotations.OnDeleteAction;
 
 import java.sql.Date;
-import java.time.Instant;
 
 @Getter
 @Setter
 @Entity
 @NoArgsConstructor
 @AllArgsConstructor
-@Table(name = "StageHistory")
-public class StageHistory {
+@Table(name = "ProposalStatus")
+public class ProposalStatus {
     @EmbeddedId
-    private StageHistoryId id;
+    private ProposalStatusId id;
 
     @MapsId("id")
     @JoinColumns({
@@ -47,23 +46,14 @@ public class StageHistory {
     @Column(name = "created_at", nullable = false)
     private Date createdAt;
 
-    public static StageHistory create(Session session, Proposal proposal, int stageIndex, String rawStatus, Date createdAt) {
-        StageHistoryId shId = new StageHistoryId(proposal.getProject().getId(), proposal.getId().getProposalId(), stageIndex);
-        StageHistory sh = new StageHistory(shId, proposal, mapStatus(rawStatus), rawStatus, createdAt);
+    public static ProposalStatus create(Session session, Proposal proposal, int statusIndex, String rawStatus, NormalizedStatus status, Date createdAt) {
+        ProposalStatusId shId = new ProposalStatusId(proposal.getProject().getId(), proposal.getId().getProposalId(), statusIndex);
+        ProposalStatus sh = new ProposalStatus(shId, proposal, status, rawStatus, createdAt);
 
         Transaction tx = session.beginTransaction();
         session.persist(sh);
         tx.commit();
 
         return sh;
-    }
-
-    private static NormalizedStatus mapStatus(String status) {
-        return switch(status) {
-            case "created", "open" -> NormalizedStatus.active;
-            case "merged" -> NormalizedStatus.accepted;
-            case "closed" -> NormalizedStatus.rejected;
-            default -> NormalizedStatus.unknown;
-        };
     }
 }
