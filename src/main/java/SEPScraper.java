@@ -17,7 +17,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class RustScraper {
+public class SEPScraper {
 
     public static Map<String, String> arguments = new HashMap<>();
 

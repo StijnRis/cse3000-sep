@@ -1,6 +1,6 @@
 # Open Source Software Attributions
 
-This document contains a list of third-party open-source libraries used in **RustScraper**, along with their copyright notices and license configurations.
+This document contains a list of third-party open-source libraries used in **SEPScraper**, along with their copyright notices and license configurations.
 
 ---
 
