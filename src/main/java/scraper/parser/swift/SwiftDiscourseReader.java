@@ -330,7 +330,10 @@ public class SwiftDiscourseReader {
         Response<ResponseBody> response = call.execute();
         rateLimit--;
 
-        if(response.body() == null) throw new IOException("Empty body from response");
+        if(response.body() == null) {
+            rateLimit = 0;
+            throw new IOException("Empty body from response");
+        }
 
         //Save document to disk as cache for rate limiting reasons
         BufferedWriter writer = new BufferedWriter(
