@@ -84,7 +84,7 @@ public class RustScraper {
         Log.log("Swift: Started");
         String gitRootFolder = rootFolder + "swift-evolution/";
         boolean ignoreCache = Boolean.parseBoolean(arguments.getOrDefault("ignorecache", "false"));
-        Project project = new Project(7, "Swift", "", "Apache-2.0");
+        Project project = new Project(7, "Swift", "Evolution", "Apache-2.0");
 
         //Project must already persist in database to prevent references to transient entities.
         persistOne(s, project);
@@ -103,6 +103,16 @@ public class RustScraper {
 
         sdr.setAuthorIndex(srr.getAuthorIndex());
         scrapeGitFiles(s, sdr);
+
+        SwiftDiscourseReader discourseReader = new SwiftDiscourseReader(s, project, sdr, cacheFolder, ignoreCache, srr.getCommentIndex(), sdr.getProposals());
+
+        discourseReader.getDiscussions();
+        discourseReader.buildStageHistory();
+
+        Log.log("DB: Persisting Proposals");
+        persistAll(s, discourseReader.getProposals());
+        Log.log("DB: Persisting Comments");
+        persistAll(s, discourseReader.getComments());
     }
 
     /**

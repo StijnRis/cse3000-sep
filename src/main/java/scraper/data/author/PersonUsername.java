@@ -33,6 +33,12 @@ public class PersonUsername {
     @JoinColumn(name = "person_id", nullable = false)
     private Person person;
 
+    public static PersonUsername createIfMissing(Session session, Person person, String domain, String username) {
+        Optional<PersonUsername> result = PersonUsername.findByDomain(session, domain, username);
+
+        return result.orElseGet(() -> PersonUsername.create(session, person, domain, username));
+    }
+
     public static PersonUsername create(Session session, Person person, String domain, String username) {
         PersonUsernameId pUId = new PersonUsernameId(person.getId(), domain, username);
         PersonUsername pU = new PersonUsername(pUId, person);
