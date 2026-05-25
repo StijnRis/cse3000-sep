@@ -1,13 +1,12 @@
 package scraper.parser.rust;
 
-import okhttp3.*;
 import org.hibernate.Session;
 import scraper.data.Project;
 import scraper.data.author.Person;
 import scraper.data.proposal.Comment;
 import scraper.data.proposal.NormalizedStatus;
 import scraper.data.proposal.Proposal;
-import scraper.data.proposal.StageHistory;
+import scraper.data.proposal.ProposalStatus;
 import scraper.data.proposal.revision.ProposalRevision;
 import scraper.data.proposal.revision.ProposalRevisionAuthor;
 import scraper.data.proposal.revision.ProposalRevisionAuthorId;
@@ -135,12 +134,12 @@ public class RustRepoReader extends RepoReader {
     }
 
     private void createStageHistory(GitHubService.PullRequest pr, Proposal proposal) {
-        StageHistory.create(session, proposal, 0, "created", NormalizedStatus.active, pr.getCreated_at());
+        ProposalStatus.create(session, proposal, 0, "created", NormalizedStatus.review, pr.getCreated_at());
 
         if(pr.getMerged_at() != null) {
-            StageHistory.create(session, proposal, 1, "merged", NormalizedStatus.accepted, pr.getMerged_at());
+            ProposalStatus.create(session, proposal, 1, "merged", NormalizedStatus.accepted, pr.getMerged_at());
         } else if(pr.getClosed_at() != null) {
-            StageHistory.create(session, proposal, 1, "closed", NormalizedStatus.rejected, pr.getClosed_at());
+            ProposalStatus.create(session, proposal, 1, "closed", NormalizedStatus.rejected, pr.getClosed_at());
         }
     }
 

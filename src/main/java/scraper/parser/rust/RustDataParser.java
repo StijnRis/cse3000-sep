@@ -7,7 +7,7 @@ import org.eclipse.jgit.revwalk.RevCommit;
 import org.hibernate.Session;
 import scraper.data.Project;
 import scraper.data.author.Person;
-import scraper.data.author.PersonUsername;
+import scraper.data.author.PersonIdentifier;
 import scraper.data.proposal.Proposal;
 import scraper.data.proposal.revision.ProposalRevision;
 import scraper.data.proposal.revision.ProposalRevisionAuthor;
@@ -113,13 +113,13 @@ public class RustDataParser {
      */
     private Person getOrCreateAuthor(PersonIdent ident) {
         Optional<Person> author = Person.findAuthorByName(session, ident.getName());
-        if(author.isEmpty()) author = Person.findAuthorByEmail(session, ident.getEmailAddress());
+        if(author.isEmpty()) author = Person.findAuthorByEmail(session, "github.com", ident.getEmailAddress());
 
         if(author.isEmpty()) { //Create new
             Person person = Person.create(session, authorIndex, ident.getName());
             authorIndex++;
 
-            PersonUsername.create(session, person, "email", ident.getEmailAddress());
+            PersonIdentifier.create(session, person, "github.com", "email", ident.getEmailAddress());
             return person;
         } else {
             return author.get();

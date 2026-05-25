@@ -13,11 +13,11 @@ import retrofit2.Retrofit;
 import retrofit2.converter.gson.GsonConverterFactory;
 import scraper.data.Project;
 import scraper.data.author.Person;
-import scraper.data.author.PersonUsername;
+import scraper.data.author.PersonIdentifier;
 import scraper.data.proposal.Comment;
 import scraper.data.proposal.NormalizedStatus;
 import scraper.data.proposal.Proposal;
-import scraper.data.proposal.StageHistory;
+import scraper.data.proposal.ProposalStatus;
 import util.Log;
 
 import java.io.*;
@@ -81,7 +81,7 @@ public class SwiftDiscourseReader {
                 results.putAll(processCategoryPage(cat));
                 page++;
 
-                if(page == 4) hasMore = false; //temp
+                if(page == 4) hasMore = false; //todo remove
             } catch (Exception e) {
                 Log.warn("Swift Discourse: Exception while processing Reviews\n" + e.getMessage());
             }
@@ -156,7 +156,7 @@ public class SwiftDiscourseReader {
                 page++;
 
 
-                if(page == 4) hasMore = false; //temp
+                if(page == 4) hasMore = false; //todo remove
             } catch (Exception e) {
                 Log.warn("Swift Discourse: Exception while processing Reviews\n" + e.getMessage());
             }
@@ -167,7 +167,7 @@ public class SwiftDiscourseReader {
 
     private void createStageHistory(Proposal pr, String rawStatus, NormalizedStatus status, Date createdAt) {
         int index = historyIndex.getOrDefault(pr.getId().getProposalId(), 0);
-        StageHistory.create(session, pr, index, rawStatus, status, createdAt);
+        ProposalStatus.create(session, pr, index, rawStatus, status, createdAt);
         historyIndex.put(pr.getId().getProposalId(), index+1);
     }
 
@@ -227,7 +227,7 @@ public class SwiftDiscourseReader {
             DiscourseService.User user = new DiscourseService.User(0, "ghost", "ghost");
             if(poster != null) user = users.get(poster.getUser_id());
             Person author = sdr.getOrCreateAuthor(user.name, "");
-            PersonUsername.createIfMissing(session, author, "swift-forum", user.username);
+            PersonIdentifier.createIfMissing(session, author, "swift.org", "username", user.username);
 
             pr = Proposal.create(session, project, id, author, topic.getTitle(),
                     "", null, null, null);
@@ -268,7 +268,7 @@ public class SwiftDiscourseReader {
         for(DiscourseService.Post post : posts.values()) {
             Person author = sdr.getOrCreateAuthor(post.name, "");
 
-            PersonUsername.createIfMissing(session, author, "swift-forum", post.username);
+            PersonIdentifier.createIfMissing(session, author, "swift.org", "username", post.username);
 
             Comment prComment = new Comment(commentIndex, author, pr, last, post.getCreated_at(),
                     post.getCooked());

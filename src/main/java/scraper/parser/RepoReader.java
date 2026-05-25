@@ -15,10 +15,9 @@ import scraper.data.Project;
 import scraper.data.author.Affiliation;
 import scraper.data.author.Organisation;
 import scraper.data.author.Person;
-import scraper.data.author.PersonUsername;
+import scraper.data.author.PersonIdentifier;
 import scraper.data.proposal.Comment;
 import scraper.data.proposal.Proposal;
-import scraper.data.proposal.revision.ProposalRevision;
 import scraper.data.proposal.revision.ProposalRevisionAuthor;
 import util.Log;
 
@@ -190,28 +189,28 @@ public abstract class RepoReader {
         if(user.getLogin() != null) user = getFullUserFromAPI(user);
 
         //Attempt to match to existing
-        Optional<Person> author = Person.findAuthorByGitHubName(session, user.getLogin());
-        if(author.isEmpty()) author = Person.findAuthorByEmail(session, user.getEmail());
+        Optional<Person> author = Person.findAuthorByGitHubName(session, "github.com", user.getLogin());
+        if(author.isEmpty()) author = Person.findAuthorByEmail(session, "github.com", user.getEmail());
         if(author.isEmpty()) author = Person.findAuthorByName(session, user.getName());
 
         if(author.isEmpty()) { //Create new
             Person person = Person.create(session, authorIndex, user.getName());
             authorIndex++;
 
-            if(user.getLogin() != null) PersonUsername.create(session, person, "github", user.getLogin());
-            if(user.getEmail() != null) PersonUsername.create(session, person, "email", user.getEmail());
+            if(user.getLogin() != null) PersonIdentifier.create(session, person, "github.com", "username", user.getLogin());
+            if(user.getEmail() != null) PersonIdentifier.create(session, person, "github.com", "email", user.getEmail());
             if(user.getCompany() != null) getOrCreateAffiliation(user.getCompany(), person);
 
             return person;
         }
 
         //Ensure all data is present if author was found
-        if (user.getLogin() != null && Person.findAuthorByGitHubName(session, user.getLogin()).isEmpty()) {
-            PersonUsername.create(session, author.get(), "github", user.getLogin());
+        if (user.getLogin() != null && Person.findAuthorByGitHubName(session, "github.com", user.getLogin()).isEmpty()) {
+            PersonIdentifier.create(session, author.get(), "github.com", "username", user.getLogin());
         }
 
-        if (user.getEmail() != null && Person.findAuthorByEmail(session, user.getEmail()).isEmpty()) {
-            PersonUsername.create(session, author.get(), "email", user.getEmail());
+        if (user.getEmail() != null && Person.findAuthorByEmail(session, "github.com", user.getEmail()).isEmpty()) {
+            PersonIdentifier.create(session, author.get(), "github.com", "email", user.getEmail());
         }
 
         if (user.getCompany() != null) getOrCreateAffiliation(user.getCompany(), author.get());

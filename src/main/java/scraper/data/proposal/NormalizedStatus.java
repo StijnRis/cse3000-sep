@@ -7,6 +7,5 @@ public enum NormalizedStatus {
     review,
     withdrawn,
     superseded,
-    active,
     unknown
 }
