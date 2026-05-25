@@ -109,6 +109,8 @@ public class SwiftDiscourseReader {
             status = NormalizedStatus.rejected;
         } else if (rawStatus.contains("returned") || rawStatus.contains("amended")) {
             status = NormalizedStatus.superseded;
+        } else if (rawStatus.contains("withdrawn") || rawStatus.contains("revision")) {
+            status = NormalizedStatus.withdrawn;
         } else if (rawStatus.contains("expired")) {
             status = NormalizedStatus.draft;
         }
