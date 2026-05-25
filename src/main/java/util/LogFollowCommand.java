@@ -59,7 +59,7 @@ public class LogFollowCommand {
      * @throws GitAPIException
      */
     public ArrayList<RevCommit> call() throws IOException, MissingObjectException, GitAPIException {
-        ArrayList<RevCommit> commits = new ArrayList<RevCommit>();
+        ArrayList<RevCommit> commits = new ArrayList<>();
         RevWalk walk = new RevWalk(repository);
         RevCommit start = walk.parseCommit(ObjectId.fromString(startCommitHash));
 
@@ -126,7 +126,7 @@ public class LogFollowCommand {
             List<DiffEntry> files = rd.compute();
             for (DiffEntry diffEntry : files) {
                 if ((diffEntry.getChangeType() == DiffEntry.ChangeType.RENAME || diffEntry.getChangeType() == DiffEntry.ChangeType.COPY) && diffEntry.getNewPath().contains(path)) {
-                    Log.log("GitReader: Path change " + diffEntry.toString());
+                    Log.log("GitReader: Path change " + diffEntry);
                     return diffEntry.getOldPath();
                 }
             }

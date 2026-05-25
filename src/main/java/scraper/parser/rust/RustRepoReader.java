@@ -21,7 +21,7 @@ import java.util.*;
 
 public class RustRepoReader extends RepoReader {
 
-    public RustRepoReader(Session session, String authToken, String cacheDir, boolean ignoreCached, Project project, int authorIndex) throws IOException {
+    public RustRepoReader(Session session, String authToken, String cacheDir, boolean ignoreCached, Project project, int authorIndex) {
         super(session, "rust-lang", "rfcs", authToken, cacheDir, ignoreCached, project, authorIndex);
 
         commentIndex = 5000000;
@@ -38,7 +38,7 @@ public class RustRepoReader extends RepoReader {
 
         for (GitHubService.PullRequest pr : prs) {
             Log.log("GitHub Scraping: Started on " + pr.getNumber());
-            Proposal proposal = null;
+            Proposal proposal;
 
             try {
                 Log.oLog("GitHub Scraping: Creating Proposal");
@@ -62,7 +62,6 @@ public class RustRepoReader extends RepoReader {
                 success++;
             } catch (Exception e) {
                 Log.log("GitHub Scraping: Failed on PR " + pr.getNumber());
-                e.printStackTrace();
                 failure++;
             }
         }

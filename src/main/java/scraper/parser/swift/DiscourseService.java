@@ -13,20 +13,11 @@ import java.sql.Date;
 
 public interface DiscourseService {
 
-    @GET("/search.json")
-    Call<ResponseBody> getTopic(@Query("q") String query);
-
     @GET("/c/evolution/{name}/{id}.json")
     Call<ResponseBody> getCategory(@Path("name") String name, @Path("id") int id, @Query("page") int page);
 
     @GET("/t/{slug}/{topic_id}/{post_number}.json")
     Call<ResponseBody> getReplies(@Path("slug") String slug,  @Path("topic_id") int topic_id,  @Path("post_number") int post_number);
-
-    @Getter
-    class Search {
-        Topic[] topics;
-        Post[] posts;
-    }
 
     @Getter
     class Post {

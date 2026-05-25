@@ -40,8 +40,6 @@ public class SwiftRepoReader extends RepoReader {
         int failure = 0;
 
         for (GitHubService.PullRequest pr : prs) {
-            if(pr.getNumber() < 3000) continue; //todo remove
-
             Log.log("GitHub Scraping: Started on " + pr.getNumber());
 
             try {
@@ -67,7 +65,6 @@ public class SwiftRepoReader extends RepoReader {
                 success++;
             } catch (Exception e) {
                 Log.log("GitHub Scraping: Failed on PR " + pr.getNumber());
-                e.printStackTrace();
                 failure++;
             }
         }

@@ -46,7 +46,6 @@ public class SwiftDataReader extends DataReader {
                     success++;
                 } catch (Exception e) {
                     Log.warn("Git: Failed reading history for " + proposal.getId().getProposalId());
-                    e.printStackTrace();
                     failure++;
                 }
             }
@@ -63,7 +62,7 @@ public class SwiftDataReader extends DataReader {
     public void createRevisionFromPR(Proposal proposal, GitHubService.PullRequest pr, int sequence) throws IOException {
         SwiftDataParser parser = new SwiftDataParser(repository, project, pr.getHead().getSha(), authorIndex);
 
-        ProposalRevision revision = null;
+        ProposalRevision revision;
         try {
             revision = parser.createRevisionFromCommit(proposal, pr, sequence);
         } catch (Exception e) {
@@ -111,7 +110,6 @@ public class SwiftDataReader extends DataReader {
                 success++;
             } catch (Exception e) {
                 Log.warn("Git: Failed creating proposal " + file.getName());
-                e.printStackTrace();
                 failure++;
             }
         }
@@ -145,7 +143,7 @@ public class SwiftDataReader extends DataReader {
         );
     }
 
-    public List<Person> getAuthorsFromContent(Scanner scanner) throws IOException {
+    public List<Person> getAuthorsFromContent(Scanner scanner) {
         ArrayList<Person> authors = new ArrayList<>();
 
         while (scanner.hasNextLine()) {
@@ -174,7 +172,7 @@ public class SwiftDataReader extends DataReader {
         return authors;
     }
 
-    public Person getOrCreateAuthor(String name, String url) throws IOException {
+    public Person getOrCreateAuthor(String name, String url) {
         Optional<Person> opt = Person.findAuthorByName(session, name);
         if(opt.isPresent()) return opt.get();
 

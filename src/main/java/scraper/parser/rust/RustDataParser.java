@@ -40,13 +40,13 @@ public class RustDataParser {
 
     public int authorIndex;
 
-    public RustDataParser(Session session, Repository repository, Project project, Proposal proposal, String rootDirPath, String startCommitHash, int authorIndex) throws IOException {
+    public RustDataParser(Session session, Repository repository, Project project, Proposal proposal, String rootDirPath, String startCommitHash, int authorIndex) {
         this.session = session;
         this.project = project;
         this.proposal = proposal;
         this.authorIndex = authorIndex;
 
-        this.gitReader = new GitReader(repository, startCommitHash); //todo efd2744b82ef44ce5359a293f346e4ba0a1a83c7
+        this.gitReader = new GitReader(repository, startCommitHash);
     }
 
     /**
@@ -94,7 +94,7 @@ public class RustDataParser {
     /**
      * Extracts author data from a commit
      */
-    private void extractAuthor(ProposalRevisionId prId, ProposalRevision pr, PersonIdent ident) throws Exception {
+    private void extractAuthor(ProposalRevisionId prId, ProposalRevision pr, PersonIdent ident) {
         Person person = getOrCreateAuthor(ident);
 
         ProposalRevisionAuthorId praId = new ProposalRevisionAuthorId(
@@ -129,7 +129,7 @@ public class RustDataParser {
     /**
      * Extract feature name from the first few lines of the markdown file containing the proposal.
      */
-    private String extractDataFromLines(String fileContent) throws Exception {
+    private String extractDataFromLines(String fileContent) {
         Scanner scanner = new Scanner(fileContent);
         String featureName = null;
 
@@ -144,7 +144,7 @@ public class RustDataParser {
             }
 
             //Early break if possible to save time
-            if(lineLC.startsWith("## Summary")) break;
+            if(lineLC.startsWith("## summary")) break;
         }
 
         //Early RFCs did not explicitly contain all fields... or have n/a

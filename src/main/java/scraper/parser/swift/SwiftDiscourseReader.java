@@ -80,8 +80,6 @@ public class SwiftDiscourseReader {
 
                 results.putAll(processCategoryPage(cat));
                 page++;
-
-                if(page == 4) hasMore = false; //todo remove
             } catch (Exception e) {
                 Log.warn("Swift Discourse: Exception while processing Reviews\n" + e.getMessage());
             }
@@ -95,21 +93,26 @@ public class SwiftDiscourseReader {
             TopicData data = entry.getValue();
 
             String rawStatus = getStatus(topic.getTitle().toLowerCase());
-            NormalizedStatus status = NormalizedStatus.unknown;
-            if (rawStatus.contains("accepted")) {
-                status = NormalizedStatus.accepted;
-            } else if (rawStatus.contains("rejected")) {
-                status = NormalizedStatus.rejected;
-            } else if (rawStatus.contains("returned") || rawStatus.contains("amended")) {
-                status = NormalizedStatus.superseded;
-            } else if (rawStatus.contains("expired")) {
-                status = NormalizedStatus.draft;
-            }
+            NormalizedStatus status = getNormalizedStatus(rawStatus);
 
             createStageHistory(data.getProposal(), rawStatus, status, topic.getCreated_at());
         }
 
         return comments;
+    }
+
+    private static NormalizedStatus getNormalizedStatus(String rawStatus) {
+        NormalizedStatus status = NormalizedStatus.unknown;
+        if (rawStatus.contains("accepted")) {
+            status = NormalizedStatus.accepted;
+        } else if (rawStatus.contains("rejected")) {
+            status = NormalizedStatus.rejected;
+        } else if (rawStatus.contains("returned") || rawStatus.contains("amended")) {
+            status = NormalizedStatus.superseded;
+        } else if (rawStatus.contains("expired")) {
+            status = NormalizedStatus.draft;
+        }
+        return status;
     }
 
     public List<Comment> getDiscussions() {
@@ -121,7 +124,7 @@ public class SwiftDiscourseReader {
                 Log.log("Swift Discourse: Processing Pitch for " + pr.getId().getProposalId());
                 String[] split = pr.getLastCommitHash().split("/");
                 String slug = split[split.length - 2];
-                Integer id = Integer.parseInt(split[split.length - 1]);
+                int id = Integer.parseInt(split[split.length - 1]);
 
                 //Little workaround but with caching it doesnt result in more calls
                 DiscourseService.TopicWithReplies twr = getRepliesFromPost(slug, id, 0);
@@ -154,9 +157,6 @@ public class SwiftDiscourseReader {
                 }
 
                 page++;
-
-
-                if(page == 4) hasMore = false; //todo remove
             } catch (Exception e) {
                 Log.warn("Swift Discourse: Exception while processing Reviews\n" + e.getMessage());
             }
@@ -220,7 +220,7 @@ public class SwiftDiscourseReader {
         return results;
     }
 
-    private Proposal findOrCreate(String id, DiscourseService.Topic topic) throws IOException {
+    private Proposal findOrCreate(String id, DiscourseService.Topic topic) {
         Proposal pr =  proposals.stream().filter(p -> p.getId().getProposalId().equals(id)).findFirst().orElse(null);
         if(pr == null) {
             DiscourseService.Poster poster = Arrays.stream(topic.getPosters()).filter(p -> p.description.equals("Original Poster")).findFirst().orElse(null);

@@ -85,9 +85,7 @@ public abstract class RepoReader {
 
         //Make sure in order.
         Comment lastComment = prComment;
-        for (int i = 0; i < conversations.size(); i++) {
-            GitHubService.Conversation conv = conversations.get(i);
-
+        for (GitHubService.Conversation conv : conversations) {
             Comment newComment = new Comment(commentIndex,
                     getOrCreateAuthor(conv.getUser()),
                     proposal,
@@ -104,7 +102,7 @@ public abstract class RepoReader {
     protected void getReviewComments(GitHubService.PullRequest pr, Proposal proposal, Comment prComment) throws IOException {
         Log.oLog("GitHub Scraping: Grabbing Review Comments");
         List<GitHubService.ReviewComment> revComments = getReviewCommentsFromAPI(OWNER, REPO, pr);
-        HashMap<Integer, Comment> lastCommentAtLine = new HashMap<Integer, Comment>();
+        HashMap<Integer, Comment> lastCommentAtLine = new HashMap<>();
         for(GitHubService.ReviewComment revComment : revComments) {
             Comment comment = new Comment(commentIndex,
                     getOrCreateAuthor(revComment.getUser()),
@@ -353,15 +351,11 @@ public abstract class RepoReader {
         // Posted by iagreen
         // Retrieved 2026-05-12, License - CC BY-SA 3.0
 
-        OkHttpClient client = new OkHttpClient.Builder().addInterceptor(new Interceptor() {
-            @NotNull
-            @Override
-            public okhttp3.Response intercept(@NotNull Chain chain) throws IOException {
-                Request newRequest  = chain.request().newBuilder()
-                        .addHeader("Authorization", "Bearer " + authToken)
-                        .build();
-                return chain.proceed(newRequest);
-            }
+        OkHttpClient client = new OkHttpClient.Builder().addInterceptor(chain -> {
+            Request newRequest  = chain.request().newBuilder()
+                    .addHeader("Authorization", "Bearer " + authToken)
+                    .build();
+            return chain.proceed(newRequest);
         }).build();
 
         return retrofit.client(client).build();

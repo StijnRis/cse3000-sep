@@ -33,7 +33,7 @@ public class SwiftDataParser {
 
     public int authorIndex;
 
-    public SwiftDataParser(Repository repository, Project project, String startCommitHash, int authorIndex) throws IOException {
+    public SwiftDataParser(Repository repository, Project project, String startCommitHash, int authorIndex) {
         this.repository = repository;
         this.project = project;
         this.authorIndex = authorIndex;
@@ -55,9 +55,7 @@ public class SwiftDataParser {
                 sequence
         );
 
-        ProposalRevision revision =  new ProposalRevision(prId, proposal, pr.getTitle(), pr.getCreated_at(), content, implemented);
-
-        return revision;
+        return new ProposalRevision(prId, proposal, pr.getTitle(), pr.getCreated_at(), content, implemented);
     }
 
     public static String getIdFromContent(Scanner scanner) {
