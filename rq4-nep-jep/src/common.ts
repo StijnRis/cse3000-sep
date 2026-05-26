@@ -7,6 +7,9 @@ const { outputFileSync } = efs;
 import type { SEP, GithubUser, GithubComment, GithubCommentJSON, Email } from '../types.d.ts';
 import { mboxParser, ParsedMail } from 'mbox-parser';
 
+const cachePath = (cacheDir: string, url: string, contentType: string) =>
+  `${cacheDir}/${url.replaceAll(/\?/g, '!').replaceAll(/:/g, ';')}.${contentType}`; // some chars may not be supported by some file systems
+
 /**
  * Fetch page of given URL
  * Caches content and gets it from cache if present
@@ -17,7 +20,7 @@ import { mboxParser, ParsedMail } from 'mbox-parser';
  * @returns text of page, to be parsed as needed
  */
 export const fetchText = async (url: string, contentType: 'html' | 'xml' | 'json' | 'rst', cacheDir: string = '', headers?: HeadersInit): Promise<string> => {
-  const cacheFile = `${cacheDir}/${url}.${contentType}`;
+  const cacheFile = cachePath(cacheDir, url, contentType);
   let resText: string;
   if(cacheDir && existsSync(cacheFile)) {
     resText = readFileSync(cacheFile, 'utf8');
@@ -74,7 +77,7 @@ export const fetchJSONParsed = async <T>(url: string, cacheDir: string, headers?
  * @returns file as blob
  */
 export const fetchFile = async (url: string, contentType: string, cacheDir: string, headers?: HeadersInit): Promise<Blob> => {
-  const cacheFile = `${cacheDir}/${url}.${contentType}`;
+  const cacheFile = cachePath(cacheDir, url, contentType);
   let resBlob: Blob;
   if(cacheDir && existsSync(cacheFile)) {
     const buf = readFileSync(cacheFile, null);
