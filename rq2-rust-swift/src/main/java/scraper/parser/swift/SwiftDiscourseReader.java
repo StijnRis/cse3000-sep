@@ -231,7 +231,7 @@ public class SwiftDiscourseReader {
             Person author = sdr.getOrCreateAuthor(user.name, "");
             PersonIdentifier.createIfMissing(session, author, "swift.org", "username", user.username);
 
-            pr = Proposal.create(session, project, id, author, topic.getTitle(),
+            pr = Proposal.create(session, project, id, topic.getTitle(),
                     "", null, null, null);
             proposals.add(pr);
         }

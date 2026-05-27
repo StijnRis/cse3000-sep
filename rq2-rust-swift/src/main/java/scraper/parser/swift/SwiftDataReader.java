@@ -128,13 +128,11 @@ public class SwiftDataReader extends DataReader {
 
         String title = scanner.nextLine().substring(2);
         String id = SwiftDataParser.getIdFromContent(scanner);
-        List<Person> authors = getAuthorsFromContent(new Scanner(file));
         String pitch = SwiftDataParser.getPitchFromContent(new  Scanner(file));
 
         return Proposal.create(session,
                 project,
                 id,
-                authors.getFirst(),
                 title,
                 "",
                 file.getName().substring(5), //remove XXXX-
