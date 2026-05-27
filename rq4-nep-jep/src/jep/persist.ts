@@ -70,7 +70,9 @@ export class JEPPersister extends Persister<JEP> {
         proposal_type: final.type,
       };
       this.db.proposal.set(`${this.projID()} ${id}`, proposal);
-      group.forEach((jep, idx) => {
+
+      let status_index = 0; // increment only when status actually changes from one revision to the next
+      group.forEach((jep, idx, revs) => {
         const revisionKey = `${this.projID()} ${id} ${idx}`;
         const allAuthorIDs = new Set(jep.authors
             .map(name => this.personDetailsToID.get(`${realNameDomain} ${name}`)!));
@@ -85,24 +87,20 @@ export class JEPPersister extends Persister<JEP> {
           implemented_at_version: jep.release,
           authors: allAuthorIDs.keys().toArray().map(id => this.db.person.get(id)!),
         });
-        // for(const author of jep.authors) {
-        //   this.db.proposal_revision_author.push({
-        //     project_id: this.projID(),
-        //     proposal_id: id,
-        //     revision_index: idx,
-        //     author_id: this.usernameToID.get([realNameDomain, author])!,
-        //   });
-        // }
-        // TODO rework JEP stage history logic
-        this.db.proposal_status.set(revisionKey, {
-          project_id: proposal.project_id,
-          proposal_id: proposal.proposal_id,
-          proposal,
-          status_index: idx,
-          normalised_status: this.normalizeStatus(jep.status),
-          raw_status: jep.status,
-          created_at: jep.created.toISOString(),
-        });
+        
+        if(idx === 0 || jep.status !== revs[idx-1].status) {
+          this.db.proposal_status.set(revisionKey, {
+            project_id: proposal.project_id,
+            proposal_id: proposal.proposal_id,
+            proposal,
+            status_index,
+            normalised_status: this.normalizeStatus(jep.status),
+            raw_status: jep.status || '',
+            created_at: jep.created.toISOString(),
+          });
+          status_index++;
+        }
+
         for(const comment of sortedBy(jep.comments, c => c.id)) {
           const newID = this.generateNumID(this.db.comment.size);
           const author = this.db.person.get(this.personDetailsToID.get(`${openjdkDomain} username ${comment.author.username}`)!)!;

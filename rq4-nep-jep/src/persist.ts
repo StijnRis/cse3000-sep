@@ -80,7 +80,7 @@ class ProposalRevisionSQL {
   title: string;
   @Column({type: 'datetime'})
   created_at: string; //date
-  @Column({type: 'text'})
+  @Column({type: 'text', nullable: true})
   content: string;
   @Column({type: 'text', nullable: true})
   implemented_at_version?: string;
@@ -111,8 +111,8 @@ class ProposalStatusSQL {
   status_index: number;
   @Column({type: 'text'})
   normalised_status: 'accepted' | 'rejected' | 'draft' | 'review' | 'withdrawn' | 'superseded' | 'unknown';
-  @Column({type: 'text', nullable: true})
-  raw_status?: string;
+  @Column({type: 'text'})
+  raw_status: string;
   @Column({type: 'datetime'})
   created_at: string; //date
 };
@@ -137,7 +137,7 @@ export class RelatedProposalSQL {
     {name: 'related_proposal_id', referencedColumnName: 'proposal_id'},
   ])
   related_proposal: ProposalSQL;
-  @Column({type: 'text'})
+  @Column({type: 'text', nullable: true})
   type: 'related' | 'supersedes';
 
   constructor(obj?: Pick<RelatedProposalSQL, 'proposal' | 'related_proposal' | 'type'>) {
@@ -171,7 +171,7 @@ class CommentSQL {
   proposal: ProposalSQL; //fk'
   @Column({type: 'integer', nullable: true}) //@ForeignKey(() => CommentSQL, {deferrable: 'INITIALLY DEFERRED'}) @JoinColumn({name: 'comment_on_comment_id'})
   comment_on_comment_id?: number; //fk''
-  @Column({type: 'datetime'})
+  @Column({type: 'datetime', nullable: true})
   created_at: string; //date
   @Column({type: 'text'})
   content: string;

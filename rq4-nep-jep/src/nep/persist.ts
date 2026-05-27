@@ -119,7 +119,7 @@ export class NEPPersister extends Persister<NEP> {
               proposal,
               status_index,
               normalised_status: this.normalizeStatus(rev.status),
-              raw_status: rev.status,
+              raw_status: rev.status || '',
               created_at: rev.created.toISOString(),
             });
             status_index++;
