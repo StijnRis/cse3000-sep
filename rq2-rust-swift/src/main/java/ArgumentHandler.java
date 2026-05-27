@@ -1,0 +1,81 @@
+import java.io.File;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Objects;
+
+public class ArgumentHandler {
+
+    public static String[] validOptions = new String[]{"local", "ignorecache", "project", "token"};
+    public static String[] validProjects = new String[]{"rust", "swift", "all"};
+
+    public static Map<String, String> parseArgs(String[] args) throws IllegalArgumentException {
+        Map<String, String> arguments = new HashMap<>();
+
+
+        if (args.length % 2 != 0 || args.length == 0) {
+            throw new IllegalArgumentException("Invalid number of arguments provided");
+        }
+
+        for(int i = 0; i < args.length; i=i+2)  {
+            String option = args[i];
+            String value = args[i+1];
+
+            if(!option.startsWith("-")) {
+                throw new IllegalArgumentException("Malformed argument option: " + option);
+            }
+
+            option = option.substring(1);
+
+            //Layer of safety for later
+            if(value == null) {
+                throw new IllegalArgumentException("Null value provided");
+            }
+
+            arguments.put(option, value);
+        }
+
+        return arguments;
+    }
+
+    public static void validateOptions(Map<String, String> arguments) throws IllegalArgumentException {
+        arguments.forEach((arg, _) -> {
+            if(Arrays.stream(validOptions).noneMatch(opt -> Objects.equals(opt, arg))) {
+                throw new IllegalArgumentException("Unknown argument option: " + arg);
+            }
+        });
+
+        validateLocal(arguments.get("local"));
+        validateProject(arguments.get("project"));
+        if(arguments.containsKey("ignorecache")) {
+            validateIgnoreCache(arguments.get("ignorecache"));
+        }
+    }
+
+    private static void validateProject(String value) throws IllegalArgumentException {
+        if(value == null) throw new IllegalArgumentException("Project must be specified");
+        if(Arrays.stream(validProjects).noneMatch(project -> Objects.equals(project, value))) {
+            throw new IllegalArgumentException("Unsupported project type: " + value);
+        }
+    }
+
+    private static void validateLocal(String value) throws IllegalArgumentException {
+        File rootDir = new File(value);
+
+        if(!rootDir.exists() && rootDir.isFile()) {
+            throw new IllegalArgumentException("Provided path is an existing file.");
+        }
+
+        if(!value.endsWith("/")) {
+            throw new IllegalArgumentException("Path must end with / for internal reasons.");
+        }
+
+        rootDir.mkdirs();
+    }
+
+    private static void validateIgnoreCache(String value) {
+        if(!value.equals("true") && !value.equals("false")) {
+            throw new IllegalArgumentException("Ignore Cache must be true or false");
+        }
+    }
+}
