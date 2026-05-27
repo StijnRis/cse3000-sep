@@ -72,13 +72,13 @@ public class Person {
         return Optional.ofNullable(results.isEmpty() ? null : results.getFirst());
     }
 
-    public static Optional<Person> findAuthorByEmail(Session session, String email) {
-        return PersonUsername.findByDomain(session, "email", email)
-                .map(PersonUsername::getPerson);
+    public static Optional<Person> findAuthorByEmail(Session session, String domain, String email) {
+        return PersonIdentifier.findByDomain(session, domain, "email", email)
+                .map(PersonIdentifier::getPerson);
     }
 
-    public static Optional<Person> findAuthorByGitHubName(Session session, String gitHubName) {
-        return PersonUsername.findByDomain(session, "github",  gitHubName)
-                .map(PersonUsername::getPerson);
+    public static Optional<Person> findAuthorByGitHubName(Session session, String domain, String gitHubName) {
+        return PersonIdentifier.findByDomain(session, domain, "username",  gitHubName)
+                .map(PersonIdentifier::getPerson);
     }
 }

@@ -13,7 +13,7 @@ import java.io.Serializable;
 @AllArgsConstructor
 @EqualsAndHashCode
 @Embeddable
-public class StageHistoryId implements Serializable {
+public class ProposalStatusId implements Serializable {
     private static final long serialVersionUID = 7262692354685593216L;
     @Column(name = "project_id", nullable = false)
     private Integer projectId;
@@ -22,8 +22,6 @@ public class StageHistoryId implements Serializable {
     @Column(name = "proposal_id", nullable = false)
     private String proposalId;
 
-    @Column(name = "stage_index", nullable = false)
-    private Integer stageIndex;
-
-
+    @Column(name = "status_index", nullable = false)
+    private Integer statusIndex;
 }

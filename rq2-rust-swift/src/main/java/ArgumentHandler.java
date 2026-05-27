@@ -7,7 +7,7 @@ import java.util.Objects;
 public class ArgumentHandler {
 
     public static String[] validOptions = new String[]{"local", "ignorecache", "project", "token"};
-    public static String[] validProjects = new String[]{"rust", "swift"};
+    public static String[] validProjects = new String[]{"rust", "swift", "all"};
 
     public static Map<String, String> parseArgs(String[] args) throws IllegalArgumentException {
         Map<String, String> arguments = new HashMap<>();
@@ -45,22 +45,11 @@ public class ArgumentHandler {
             }
         });
 
-        boolean hasLocal = arguments.containsKey("local");
-        boolean hasRemote = arguments.containsKey("remote");
-
-        //One of these needs to be provided
-        if(hasLocal && hasRemote) {
-            throw new IllegalArgumentException("More than one source specified");
-        } else if(hasLocal) {
-            validateLocal(arguments.get("local"));
-        } else if(hasRemote) {
-            validateIgnoreCache(arguments.get("ignorecache"));
-        } else {
-            throw new IllegalArgumentException("Missing either local or remote path");
-        }
-
+        validateLocal(arguments.get("local"));
         validateProject(arguments.get("project"));
-
+        if(arguments.containsKey("ignorecache")) {
+            validateIgnoreCache(arguments.get("ignorecache"));
+        }
     }
 
     private static void validateProject(String value) throws IllegalArgumentException {

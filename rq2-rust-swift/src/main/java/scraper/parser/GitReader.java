@@ -6,22 +6,18 @@ import org.eclipse.jgit.lib.ObjectLoader;
 import org.eclipse.jgit.lib.Repository;
 import org.eclipse.jgit.revwalk.RevCommit;
 import org.eclipse.jgit.revwalk.RevTree;
-import org.eclipse.jgit.storage.file.FileRepositoryBuilder;
 import org.eclipse.jgit.treewalk.TreeWalk;
 import org.eclipse.jgit.treewalk.filter.PathFilter;
-import util.Log;
 import util.LogFollowCommand;
 
-import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
 public class GitReader {
 
-    private FileRepositoryBuilder builder;
-    private Repository repo;
-    private LogFollowCommand lfc;
+    private final Repository repo;
+    private final LogFollowCommand lfc;
 
     @Getter
     private String lastPath;
@@ -31,7 +27,7 @@ public class GitReader {
      * @param repo Git Repo
      * @param startCommitHash Last Commit in the PR
      */
-    public GitReader(Repository repo, String startCommitHash) throws IOException {
+    public GitReader(Repository repo, String startCommitHash) {
         this.repo = repo;
         lfc = new LogFollowCommand(repo, startCommitHash);
     }
@@ -40,10 +36,7 @@ public class GitReader {
      * @return List of all commits for the file specified during creation
      */
     public List<RevCommit> readProjectGitInternal() throws Exception {
-        Log.log("RFC Parsing - GitReader: Started");
-
-        ArrayList<RevCommit> proposals = new ArrayList<>();
-        proposals.addAll(lfc.call());
+        ArrayList<RevCommit> proposals = new ArrayList<>(lfc.call());
         lastPath = lfc.getLastPath();
 
         return proposals;

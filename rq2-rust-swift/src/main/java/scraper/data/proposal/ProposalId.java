@@ -6,6 +6,7 @@ import jakarta.persistence.Lob;
 import lombok.*;
 
 import java.io.Serializable;
+import java.util.Objects;
 
 @AllArgsConstructor
 @Getter
@@ -22,5 +23,10 @@ public class ProposalId implements Serializable {
     @Column(name = "proposal_id", nullable = false)
     private String proposalId;
 
+    @Override
+    public final boolean equals(Object o) {
+        if (!(o instanceof ProposalId that)) return false;
 
+        return Objects.equals(projectId, that.projectId) && Objects.equals(proposalId, that.proposalId);
+    }
 }

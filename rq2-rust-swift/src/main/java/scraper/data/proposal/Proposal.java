@@ -13,6 +13,8 @@ import scraper.data.Project;
 import scraper.data.author.Person;
 import scraper.parser.GitHubService;
 
+import java.util.List;
+
 @Getter
 @Setter
 @Entity
@@ -43,15 +45,32 @@ public class Proposal {
     private String proposalType;
 
     @Transient
-    private GitHubService.PullRequest pullRequest;
+    private String fileIdentifier;
+
+    @Transient
+    private List<GitHubService.PullRequest> pullRequests;
 
     @Transient
     private String lastCommitHash;
 
-    public static Proposal create(Session session, Project project, String proposalId, Person proposer, String topic, String proposalType, GitHubService.PullRequest pullRequest, String lastCommitHash) {
+    public Proposal update(Session session) {
+        Transaction tx = session.beginTransaction();
+        session.persist(this);
+        tx.commit();
+
+        return this;
+    }
+
+    public void drop(Session session) {
+        Transaction tx = session.beginTransaction();
+        session.remove(this);
+        tx.commit();
+    }
+
+    public static Proposal create(Session session, Project project, String proposalId, Person proposer, String topic, String proposalType, String fileIdentifier, List<GitHubService.PullRequest> pullRequests, String lastCommitHash) {
         ProposalId pId = new ProposalId(project.getId(), proposalId);
 
-        Proposal proposal = new Proposal(pId, project, proposer, topic, proposalType, pullRequest, lastCommitHash);
+        Proposal proposal = new Proposal(pId, project, proposer, topic, proposalType, fileIdentifier, pullRequests, lastCommitHash);
 
         Transaction tx = session.beginTransaction();
         session.persist(proposal);
