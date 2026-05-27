@@ -97,7 +97,11 @@ public class SwiftRepoReader extends RepoReader {
 
         Log.oLog("GitHub Scraping: Grabbing Conversations");
 
-        Comment prComment = new Comment(commentIndex, proposal.getProposer(), proposal, null, pr.getCreated_at(),
+        sdr.setAuthorIndex(authorIndex);
+        Person author = sdr.getAuthorsFromContent(new Scanner(content)).getFirst();
+        authorIndex = sdr.getAuthorIndex();
+
+        Comment prComment = new Comment(commentIndex, author, proposal, null, pr.getCreated_at(),
                 pr.getBody() != null ? pr.getBody() : "");
         commentIndex++;
         comments.add(prComment);
@@ -130,11 +134,7 @@ public class SwiftRepoReader extends RepoReader {
         String title = getTitleSafe(content);
         String id = getNewFallbackId();
 
-        sdr.setAuthorIndex(authorIndex);
-        Person author = sdr.getAuthorsFromContent(new Scanner(content)).getFirst();
-        authorIndex = sdr.getAuthorIndex();
-
-        Proposal p = Proposal.create(session, project, id, author, title, "", fileIdentifier, new ArrayList<>(), pr.getHead().getSha());
+        Proposal p = Proposal.create(session, project, id, title, "", fileIdentifier, new ArrayList<>(), pr.getHead().getSha());
         proposals.add(p);
         return p;
     }

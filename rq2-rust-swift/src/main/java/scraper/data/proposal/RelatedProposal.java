@@ -38,7 +38,7 @@ public class RelatedProposal {
     @OnDelete(action = OnDeleteAction.RESTRICT)
     private Proposal relatedProposal;
 
-    @Enumerated
+    @Enumerated(EnumType.STRING)
     @Column(name = "type")
     private RelatedProposalType type;
 }

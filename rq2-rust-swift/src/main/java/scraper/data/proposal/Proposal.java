@@ -31,11 +31,6 @@ public class Proposal {
     @JoinColumn(name = "project_id", nullable = false)
     private Project project;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @OnDelete(action = OnDeleteAction.RESTRICT)
-    @JoinColumn(name = "proposer_id")
-    private Person proposer;
-
     @Lob
     @Column(name = "topic")
     private String topic;
@@ -67,10 +62,10 @@ public class Proposal {
         tx.commit();
     }
 
-    public static Proposal create(Session session, Project project, String proposalId, Person proposer, String topic, String proposalType, String fileIdentifier, List<GitHubService.PullRequest> pullRequests, String lastCommitHash) {
+    public static Proposal create(Session session, Project project, String proposalId, String topic, String proposalType, String fileIdentifier, List<GitHubService.PullRequest> pullRequests, String lastCommitHash) {
         ProposalId pId = new ProposalId(project.getId(), proposalId);
 
-        Proposal proposal = new Proposal(pId, project, proposer, topic, proposalType, fileIdentifier, pullRequests, lastCommitHash);
+        Proposal proposal = new Proposal(pId, project, topic, proposalType, fileIdentifier, pullRequests, lastCommitHash);
 
         Transaction tx = session.beginTransaction();
         session.persist(proposal);

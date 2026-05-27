@@ -46,7 +46,7 @@ public class RustRepoReader extends RepoReader {
                 String id = String.format("%04d", pr.getNumber());
 
 
-                proposal = Proposal.create(session, project, id, author, pr.getTitle(), "", "", List.of(pr), pr.getHead().getSha());
+                proposal = Proposal.create(session, project, id, pr.getTitle(), "", "", List.of(pr), pr.getHead().getSha());
                 proposals.add(proposal);
 
                 createStageHistory(pr, proposal);
