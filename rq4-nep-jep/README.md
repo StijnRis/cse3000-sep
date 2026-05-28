@@ -6,8 +6,10 @@ Set these on your machine or in a `.env` file
 # For scraping:
 GITHUB_TOKEN # auth token for github API
 GITHUB_API_VERSION # version of github API (see github docs for format)
-# For analysis:
-COMMON_DB_FILE # SQL database file from which to read SEP data
+# For merging databases:
+INPUT_DB_FILES # SQL database files from which to read SEP data to be combined into one; file names must be separated by a comma and nothing else; final path will be <root>/data/{file name} for each input file
+# For merging databases and analysis:
+COMMON_DB_FILE # SQL database file with combined SEP data; final path will be <root>/data/{file name}
 ```
 
 # Setup
@@ -60,6 +62,14 @@ The file `nep-missing-dates.json` contains the oldest date from the GitHub histo
 The GitHub API can be accessed without a token, but the rate limit will be lower.
 
 Leaving out the `new-db` flag will cause the new data to be appended, and may cause primary key conflicts and such. One situation where you may want to leave it out is if you want to dump both JEP and NEP into the same database. IDs are different between projects, so that shouldn't cause issues.
+
+# Running data merger
+
+After setting [environment variables](#environment-variables):
+
+```bash
+python db_merger.py
+```
 
 # Running analysis
 
