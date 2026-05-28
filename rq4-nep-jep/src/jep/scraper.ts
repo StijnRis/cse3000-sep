@@ -9,7 +9,7 @@ import type { SEP } from '../../types.js';
 const jepBaseURL = 'openjdk.org/jeps/';
 const jepURL = (id: number) => `${jepBaseURL}${id}`;
 const jepIssueBaseURL = 'bugs.openjdk.org/';
-// const jepIssueURL = (issueID: number) => `${jepIssueBaseURL}browse/JDK-${issueID}`;
+const jepIssueURL = (issueID: number) => `${jepIssueBaseURL}browse/JDK-${issueID}`;
 const jepXMLURL = (issueID: number) => `${jepIssueBaseURL}si/jira.issueviews:issue-xml/JDK-${issueID}/JDK-${issueID}.xml`;
 const jepPrintableURL = (issueID: number) => `${jepIssueBaseURL}si/jira.issueviews:issue-html/JDK-${issueID}/JDK-${issueID}.html`;
 
@@ -129,6 +129,7 @@ const parseJEP = async (id: number, supersederID: number | undefined, html: HTML
       .map(row => row.getElementsByTagName('td').map((h, i) => i === 0 ? h.text : h))
   );
   const issueID = parseInt(metadata['Issue'].text);
+  const issuePage = await fetchHTMLParsed(jepIssueURL(issueID), cacheDir);
   const issueXML = await fetchXMLParsed(jepXMLURL(issueID), jepXMLParser, cacheDir);
   const jepXML: JEPXML = issueXML.rss.channel.item;
   const type = getJEPXMLField(jepXML, 'JEP Type')![0]['#text'];
@@ -150,7 +151,7 @@ const parseJEP = async (id: number, supersederID: number | undefined, html: HTML
     release: metadata['Release']?.text,
     supersederID,
     relatedIDs: metadata['Relates to']?.querySelectorAll('a').map(a => parseInt(a.getAttribute('href')!)) || [],
-    content: parse(jepXML.description).text,
+    content: issuePage.getElementById('description-val')!.text,
     comments,
   }
 };
