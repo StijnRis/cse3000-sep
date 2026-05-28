@@ -7,7 +7,7 @@ from pyutil.entities import *
 _ = load_dotenv()
 src_files = getenv('INPUT_DB_FILES')
 src_files = src_files.split(',') if src_files else []
-out_file = 'test.db'
+out_file = getenv('COMMON_DB_FILE')
 out_eng = create_engine(f'sqlite:///data/{out_file}')
 Base.metadata.create_all(out_eng)
 out_ses = Session(out_eng)
