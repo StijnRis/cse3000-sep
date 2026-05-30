@@ -186,7 +186,7 @@ class Database {
   proposal = new Map<string/*project_id proposal_id*/, ProposalSQL>();
   proposal_revision = new Map<string/*project_id proposal_id revision_index*/, ProposalRevisionSQL>();
   proposal_status = new Map<string/*project_id proposal_id stage_index*/, ProposalStatusSQL>();
-  related_proposal: RelatedProposalSQL[] = [];
+  related_proposal = new Map<string/*project_id proposal_id related_project_id related_proposal_id*/, RelatedProposalSQL>();
   comment = new Map<number/*comment_id*/, CommentSQL>();
 }
 
@@ -305,10 +305,10 @@ export const dumpDatabase = async (dataSource: DataSource, db: Database) => {
   await dataSource.getRepository(ProjectSQL).save(db.project.values().toArray());
   await dataSource.getRepository(OrganisationSQL).save(db.organisation.values().toArray());
   await dataSource.getRepository(PersonSQL).save(db.person.values().toArray());
-  await dataSource.getRepository(PersonIdentifierSQL).save(db.person_identifier.values().toArray());
+  await dataSource.getRepository(PersonIdentifierSQL).save(db.person_identifier.values().toArray(), { chunk: 500 });
   await dataSource.getRepository(ProposalSQL).save(db.proposal.values().toArray());
-  await dataSource.getRepository(ProposalRevisionSQL).save(db.proposal_revision.values().toArray());
-  await dataSource.getRepository(ProposalStatusSQL).save(db.proposal_status.values().toArray());
-  await dataSource.getRepository(RelatedProposalSQL).save(db.related_proposal);
+  await dataSource.getRepository(ProposalRevisionSQL).save(db.proposal_revision.values().toArray(), { chunk: 500 });
+  await dataSource.getRepository(ProposalStatusSQL).save(db.proposal_status.values().toArray(), { chunk: 500 });
+  await dataSource.getRepository(RelatedProposalSQL).save(db.related_proposal.values().toArray());
   await dataSource.getRepository(CommentSQL).save(db.comment.values().toArray());
 };

@@ -154,7 +154,7 @@ export class NEPPersister extends Persister<NEP> {
       if(nep.supersederID !== undefined) {
         const superseded = this.db.proposal.get(`${this.projID()} ${nep.id}`)!;
         const superseder = this.db.proposal.get(`${this.projID()} ${nep.supersederID}`)!;
-        this.db.related_proposal.push(new RelatedProposalSQL({
+        this.db.related_proposal.set(`${superseder.project_id} ${superseder.proposal_id} ${superseded.project_id} ${superseded.proposal_id}`, new RelatedProposalSQL({
           proposal: superseder,
           related_proposal: superseded,
           type: 'supersedes',

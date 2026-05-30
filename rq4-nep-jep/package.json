@@ -13,10 +13,11 @@
   "license": "ISC",
   "type": "module",
   "dependencies": {
+    "email-reply-parser": "^2.3.5",
     "fast-xml-parser": "^5.7.3",
     "fs-extra": "^11.3.5",
-    "node-html-parser": "^7.1.0",
     "mbox-parser": "^1.0.1",
+    "node-html-parser": "^7.1.0",
     "reflect-metadata": "^0.2.2",
     "sqlite3": "^5.0.3",
     "typeorm": "^0.3.28"
