@@ -77,7 +77,7 @@ public class RustDataParser {
             ProposalRevision pr = new ProposalRevision(
                     prId,
                     proposal,
-                    extractDataFromLines(fileContent),
+                    proposal.getPullRequests().getFirst().getTitle(),
                     createdAt,
                     fileContent,
                     ""
