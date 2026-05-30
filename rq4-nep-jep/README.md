@@ -6,10 +6,16 @@ Set these on your machine or in a `.env` file
 # For scraping:
 GITHUB_TOKEN # auth token for github API
 GITHUB_API_VERSION # version of github API (see github docs for format)
+
 # For merging databases:
 INPUT_DB_FILES # SQL database files from which to read SEP data to be combined into one; file names must be separated by a comma and nothing else; final path will be <root>/data/{file name} for each input file
+
 # For merging databases and analysis:
 COMMON_DB_FILE # SQL database file with combined SEP data; final path will be <root>/data/{file name}
+
+# For analysis
+OPENAI_API_KEY # API key for OpenAI
+HF_TOKEN # access token for Hugging Face
 ```
 
 # Setup
