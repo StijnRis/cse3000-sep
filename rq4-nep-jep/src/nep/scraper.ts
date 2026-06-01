@@ -235,6 +235,8 @@ const parseNEP = async (strID: string, html: HTMLElement, cacheDir: string): Pro
     .map(h => h.getAttribute('href')!);
   const comments = (await Promise.all(resolutionURLs.map(url => collectNEPComments(url, cacheDir)))).flat();
 
+  const revisions = await collectNEPRevisions(strID, cacheDir);
+  
   return {
     id,
     title,
@@ -242,7 +244,7 @@ const parseNEP = async (strID: string, html: HTMLElement, cacheDir: string): Pro
     // some old NEPs don't have dates on the website, I manually took the earliest dates I could find from their github history
     // created: new Date(dateStr ? `${dateStr} UTC` : nepDates[`${id}` as keyof typeof nepDates]),
     supersederID: supersederIDStr ? parseInt(supersederIDStr) : undefined,
-    revisions: await collectNEPRevisions(strID, cacheDir),
+    revisions,
     comments,
   };
 };

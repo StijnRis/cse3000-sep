@@ -38,7 +38,7 @@ export class NEPPersister extends Persister<NEP> {
     for(const nep of sortedBy(neps, n => n.id)) {
       for(const rev of sortedBy(nep.revisions, r => r.created.getDate()))
         for(const author of sortedBy(rev.authors, a => a.name)) {
-          let person_id;
+          let person_id: number;
           if(author.email !== undefined) {
             person_id = this.ensurePerson(numpyDomain, 'email', author.email, author.name, [numpyOrg]).person_id;
             this.addPersonDetails(person_id, numpyDomain, 'email', author.email);
@@ -84,15 +84,14 @@ export class NEPPersister extends Persister<NEP> {
       this.db.proposal.set(`${this.projID()} ${id}`, proposal);
 
       let status_index = 0; // increment only when status actually changes from one revision to the next
-      nep.revisions
+      sortedBy(nep.revisions, r => r.created.getTime())
         // index ordered by creation date ascending
-        .toSorted(({created: d1}, {created: d2}) => d1.getTime() - d2.getTime())
         .forEach((rev, i, revs) => {
           const revisionKey = `${this.projID()} ${id} ${i}`;
           const allAuthorIDs = rev.authors
             .map(author => this.personDetailsToID.get(author.email === undefined
-              ? `${realNameDomain} ${author.name}`
-              : `${emailDomain} ${author.email}`)!);
+              ? `${numpyDomain} display_name ${author.name}`
+              : `${numpyDomain} email ${author.email}`)!);
           this.db.proposal_revision.set(revisionKey, {
             project_id: proposal.project_id,
             proposal_id: proposal.proposal_id,
