@@ -71,7 +71,7 @@ Leaving out the `new-db` flag will cause the new data to be appended, and may ca
 
 # Running data merger
 
-After setting [environment variables](#environment-variables):
+After getting data files and specifying them accordingly in [environment variables](#environment-variables):
 
 ```bash
 python db_merger.py
