@@ -42,7 +42,7 @@ class PersonIdentifierSQL {
 };
 
 @Entity('Organisation')
-class OrganisationSQL {
+export class OrganisationSQL {
   @PrimaryColumn({type: 'integer'})
   organisation_id: number;
   @Column({type: 'text'})

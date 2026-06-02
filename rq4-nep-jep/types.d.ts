@@ -10,9 +10,16 @@ export type EmailUser = {
   email: string,
   name: string,
 };
-export type GithubUser = {
+export type GithubUserJSON = {
   login: string,
   name: string,
+};
+export type GithubOrganisation = {
+  login: string,
+  name?: string,
+};
+export type GithubUser = GithubUserJSON & {
+  affiliations: GithubOrganisation[],
 };
 
 export type Comment<ID, A> = {

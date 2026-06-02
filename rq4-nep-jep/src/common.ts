@@ -4,7 +4,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import { Readable } from 'node:stream';
 import efs from 'fs-extra';
 const { outputFileSync } = efs;
-import type { SEP, GithubUser, GithubComment, GithubCommentJSON, Email } from '../types.d.ts';
+import type { SEP, GithubUser, GithubUserJSON, GithubComment, GithubCommentJSON, Email, GithubOrganisation } from '../types.d.ts';
 import { mboxParser, ParsedMail } from 'mbox-parser';
 
 const cachePath = (cacheDir: string, url: string, contentType: string) =>
@@ -94,6 +94,8 @@ export const fetchFile = async (url: string, contentType: string, cacheDir: stri
 
 const githubAPIBase = 'api.github.com/';
 const githubUserAPI = (login: string) => `${githubAPIBase}users/${login}`;
+const githubAffiliationsAPI = (login: string) => `${githubUserAPI(login)}/orgs`;
+const githubOrgAPI = (login: string) => `${githubAPIBase}orgs/${login}`;
 const githubRepoAPI = (owner: string, repo: string) => `${githubAPIBase}repos/${owner}/${repo}`;
 export const githubPullAPI = (owner: string, repo: string, pullID: number) => `${githubRepoAPI(owner, repo)}/pulls/${pullID}`;
 export const githubIssueAPI = (owner: string, repo: string, issueID: number) => `${githubRepoAPI(owner, repo)}/issues/${issueID}`;
@@ -124,8 +126,15 @@ export const ghAuthHeaders: HeadersInit = {
  * @returns user details
  */
 export const getGithubUser = async (login: string, cacheDir: string): Promise<GithubUser> => {
-  const { name } = await fetchJSONParsed<GithubUser>(githubUserAPI(login), cacheDir, ghAuthHeaders);
-  return { login, name };
+  const { name } = await fetchJSONParsed<GithubUserJSON>(githubUserAPI(login), cacheDir, ghAuthHeaders);
+  const affils = await fetchJSONParsed<{ login: string }[]>(githubAffiliationsAPI(login), cacheDir, ghAuthHeaders);
+  const orgs = await Promise.all(affils.map(({ login }) => fetchJSONParsed<GithubOrganisation>(
+    githubOrgAPI(login), cacheDir, ghAuthHeaders)));
+  return {
+    login,
+    name,
+    affiliations: orgs.map(({ login, name }) => ({ login, name })),
+  };
 };
 
 export const parseGithubCommentJSON = async ({
