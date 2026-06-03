@@ -107,7 +107,9 @@ public class SwiftDiscourseReader {
             status = NormalizedStatus.accepted;
         } else if (rawStatus.contains("rejected")) {
             status = NormalizedStatus.rejected;
-        } else if (rawStatus.contains("returned") || rawStatus.contains("amended")) {
+        } else if (rawStatus.contains("review") || rawStatus.contains("deferred")) {
+            status = NormalizedStatus.review;
+        } else if (rawStatus.contains("returned") || rawStatus.contains("amended") || rawStatus.contains("amendment")) {
             status = NormalizedStatus.superseded;
         } else if (rawStatus.contains("withdrawn") || rawStatus.contains("revision")) {
             status = NormalizedStatus.withdrawn;

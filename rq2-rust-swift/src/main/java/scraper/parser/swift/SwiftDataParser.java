@@ -48,6 +48,9 @@ public class SwiftDataParser {
         RevCommit commit = walk.parseCommit(ObjectId.fromString(pr.getHead().getSha()));
         String content = gitReader.getFileContents(commit.getTree(), commit);
         String implemented = getImplementedAt(content);
+        String title = content.split("\n")[0].substring(2);
+
+        if(!getIdFromContent(new Scanner(content)).equals(proposal.getId().getProposalId())) throw new Exception();
 
         ProposalRevisionId prId = new ProposalRevisionId(
                 project.getId(),
@@ -55,7 +58,7 @@ public class SwiftDataParser {
                 sequence
         );
 
-        return new ProposalRevision(prId, proposal, pr.getTitle(), pr.getCreated_at(), content, implemented);
+        return new ProposalRevision(prId, proposal, title, pr.getCreated_at(), content, implemented);
     }
 
     public static String getIdFromContent(Scanner scanner) {
