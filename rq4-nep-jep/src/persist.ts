@@ -288,7 +288,7 @@ export abstract class Persister<SEP_T> {
  */
 export const dataSource = async (database: string, dropSchema: boolean): Promise<DataSource> =>
   await new DataSource({
-    type: 'sqlite',
+    type: 'better-sqlite3',
     database,
     entities: [ProjectSQL, OrganisationSQL, PersonSQL, PersonIdentifierSQL, ProposalSQL, ProposalRevisionSQL, ProposalStatusSQL, RelatedProposalSQL, CommentSQL],
     synchronize: true,
