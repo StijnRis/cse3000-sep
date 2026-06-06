@@ -76,6 +76,7 @@ public class RustRepoReader extends RepoReader {
         List<ProposalRevision> revisions = new ArrayList<>();
         List<GitHubService.PRCommit> commits = getCommitListFromAPI(OWNER, REPO, proposal.getPullRequests().getFirst());
 
+        int propRevisionIndex = 0;
         for (int i = 0; i < commits.size(); i++) {
             try {
                 GitHubService.PRCommit commit = commits.get(i);
@@ -101,7 +102,7 @@ public class RustRepoReader extends RepoReader {
                 ProposalRevisionId prId = new ProposalRevisionId(
                         project.getId(),
                         proposal.getId().getProposalId(),
-                        i
+                        propRevisionIndex
                 );
 
                 ProposalRevision pr = new ProposalRevision(
@@ -114,6 +115,7 @@ public class RustRepoReader extends RepoReader {
                 );
 
                 revisions.add(pr);
+                propRevisionIndex++;
 
                 GitHubService.GitHubUser user = prc.getAuthor();
                 if (user == null)
