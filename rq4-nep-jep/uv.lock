@@ -2232,7 +2232,7 @@ dev = [
 requires-dist = [
     { name = "beautifulsoup4", specifier = "==4.14.3" },
     { name = "dotenv", specifier = "==0.9.9" },
-    { name = "google-genai", specifier = ">=2.8.0" },
+    { name = "google-genai", specifier = "==2.8.0" },
     { name = "google-generativeai", specifier = "==0.8.6" },
     { name = "jupyter", specifier = "==1.1.1" },
     { name = "matplotlib", specifier = "==3.10.9" },
