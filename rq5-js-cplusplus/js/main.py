@@ -1,12 +1,13 @@
 import logging
 import os
+from datetime import datetime
 from pathlib import Path
 from typing import Dict, List
 
 from dotenv import load_dotenv
 from pydantic import TypeAdapter
 
-from js import proposal_revisions, proposal_stages
+from js import proposal_revisions, proposal_statusses
 from js.insert_db import save_to_db
 from js.proposal_meeting_notes import MeetingNote, build_mapping
 
@@ -22,20 +23,28 @@ def main():
     if token is None:
         raise RuntimeError("GITHUB_TOKEN must be set in environment")
 
+    project_id = 3
+
     proposal_v1_path = Path("./js/output/proposals_v1.json")
     proposal_v2_path = Path("./js/output/proposals_v2.json")
     meeting_mapping_path = Path("./js/output/meeting_notes_mapping.json")
-    db_path = Path("./js/output/js_proposals.sqlite3")
-    project_id = 3
+    current_date = datetime.now().strftime("%Y-%m-%d")
+    db_path = Path(f"./js/output/js_proposals_{current_date}.sqlite3")
 
-    adapter1 = TypeAdapter(Dict[str, proposal_stages.ProposalV1])
+    # Ensure output directories exist
+    proposal_v1_path.parent.mkdir(parents=True, exist_ok=True)
+    proposal_v2_path.parent.mkdir(parents=True, exist_ok=True)
+    meeting_mapping_path.parent.mkdir(parents=True, exist_ok=True)
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+
+    adapter1 = TypeAdapter(Dict[str, proposal_statusses.ProposalV1])
     adapter2 = TypeAdapter(Dict[str, proposal_revisions.ProposalV2])
     adapter_meetings_map = TypeAdapter(Dict[str, List[MeetingNote]])
 
-    if not proposal_v2_path.exists():
+    if not proposal_v1_path.exists():
         logging.info("Computing stage history")
-        proposals_v1: Dict[str, proposal_stages.ProposalV1] = (
-            proposal_stages.compute_stage_history()
+        proposals_v1: Dict[str, proposal_statusses.ProposalV1] = (
+            proposal_statusses.compute_stage_history()
         )
         json_data = adapter1.dump_json(proposals_v1, indent=2)
         proposal_v1_path.write_bytes(json_data)
@@ -50,7 +59,9 @@ def main():
     if not meeting_mapping_path.exists():
         logging.info("Finding meeting notes")
         mapping = build_mapping()
-        meeting_mapping_path.write_bytes(adapter_meetings_map.dump_json(mapping, indent=2))
+        meeting_mapping_path.write_bytes(
+            adapter_meetings_map.dump_json(mapping, indent=2)
+        )
 
     if not db_path.exists():
         logging.info("Saving to database")

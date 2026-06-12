@@ -3,10 +3,11 @@ from pathlib import Path
 from typing import List
 
 from db import (
+    ensure_person,
+    ensure_person_organisation,
     get_connection,
     init_db,
     insert_comment,
-    insert_or_get_person,
     insert_project,
     insert_proposal,
     insert_proposal_revision,
@@ -49,8 +50,9 @@ def save_to_db(
                 proposal_type=None,
             )
 
+            sorted_stages = sorted(proposal.stages, key=lambda s: s.created_at)
             stage_index = 0
-            for stage in proposal.stages:
+            for stage in sorted_stages:
                 normalised_status = get_normalised_status(stage.status)
                 insert_stage_history(
                     conn,
@@ -77,7 +79,7 @@ def save_to_db(
                     implemented_at_version=revision.implemented_at_version,
                 )
                 if revision.author:
-                    person_id = insert_or_get_person(conn, revision.author)
+                    person_id = ensure_person(conn, revision.author)
                     insert_proposal_revision_author(
                         conn,
                         project_id=project_id,
@@ -95,11 +97,15 @@ def save_to_db(
                     continue
 
                 notes = meeting_notes[location]
-                sorted_notes = sorted(notes, key=lambda n: n.index)
+                sorted_notes: List[MeetingNote] = sorted(notes, key=lambda n: n.index)
                 previous_note_id = None
                 index = 0
                 for note in sorted_notes:
-                    author_id = insert_or_get_person(conn, note.author)
+                    author_id = ensure_person(conn, note.author.name)
+                    if note.author.organization:
+                        ensure_person_organisation(
+                            conn, author_id, note.author.organization
+                        )
                     previous_note_id = insert_comment(
                         conn,
                         author_id=author_id,

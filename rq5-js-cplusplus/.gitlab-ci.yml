@@ -1,0 +1,33 @@
+variables:
+  UV_VERSION: "0.11.16"
+  PYTHON_VERSION: "3.13"
+  BASE_LAYER: trixie-slim
+  # GitLab CI creates a separate mountpoint for the build directory,
+  # so we need to copy instead of using hard links.
+  UV_LINK_MODE: copy
+  PROJECT_DIR: rq5-js-cplusplus
+
+default:
+  image: ghcr.io/astral-sh/uv:$UV_VERSION-python$PYTHON_VERSION-$BASE_LAYER
+  before_script:
+    - cd $PROJECT_DIR
+
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "parent_pipeline"
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_PIPELINE_SOURCE == "web"
+
+
+# Check code formatting and linting with Ruff
+ruff-check:
+  script:
+    - uv run ruff format --check
+    - uv run ruff check
+
+# Run pytest
+run-tests:
+  script:
+    - uv sync
+    - uv run pytest --ignore-glob="*test_db.py"

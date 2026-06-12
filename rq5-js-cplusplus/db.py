@@ -22,18 +22,12 @@ def init_db(db_path: Path, start_id: int) -> None:
 
 
 def set_all_autoincrement_starts(conn: sqlite3.Connection, start_id: int) -> None:
-    """
-    Resets the auto-increment counter for all primary key tables
-    to begin at the specified start_id.
-    """
-    # List of tables in your schema that use an internal AUTOINCREMENT ID
     tables = ["Project", "Person", "Organisation", "Comment"]
 
-    cur = conn.cursor()
     new_val = start_id - 1
 
+    cur = conn.cursor()
     for table in tables:
-        # We use INSERT OR REPLACE to handle both new and existing entries in the system table
         cur.execute(
             "INSERT OR REPLACE INTO sqlite_sequence (name, seq) VALUES (?, ?)",
             (table, new_val),
@@ -66,9 +60,7 @@ def insert_project(
         "INSERT INTO Project (project_id, project_name, enhancement_proposal_name, copyright) VALUES (?, ?, ?, ?)",
         (project_id, project_name, enhancement_proposal_name, copyright_text),
     )
-    if cur.lastrowid is None:
-        raise Exception("Failed to insert project, lastrowid is None")
-    return cur.lastrowid
+    return project_id
 
 
 def insert_proposal(
@@ -96,14 +88,14 @@ def insert_stage_history(
 ) -> None:
     cur = conn.cursor()
     cur.execute(
-        "INSERT INTO StageHistory (project_id, proposal_id, stage_index, normalised_status, raw_status, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+        "INSERT INTO ProposalStatus (project_id, proposal_id, status_index, raw_status, normalised_status, created_at) VALUES (?, ?, ?, ?, ?, ?)",
         (
             project_id,
             proposal_id,
             stage_index,
-            normalised_status,
             raw_status,
-            created_at,
+            normalised_status,
+            created_at.isoformat(),
         ),
     )
 
@@ -126,7 +118,7 @@ def insert_proposal_revision(
             proposal_id,
             revision_index,
             title,
-            created_at,
+            created_at.isoformat(),
             content,
             implemented_at_version,
         ),
@@ -152,38 +144,74 @@ def insert_proposal_revision_author(
     )
 
 
-def insert_or_get_person(conn: sqlite3.Connection, full_name: Optional[str]) -> int:
+def ensure_person_identifier(
+    conn: sqlite3.Connection,
+    person_id: int,
+    domain: str,
+    identifier_type: str,
+    identifier: str,
+) -> None:
+    """
+    Insert a PersonIdentifier row if it does not already exist. Domain may be NULL.
+    """
     cur = conn.cursor()
-    cur.execute("SELECT person_id FROM Person WHERE full_name = ?", (full_name,))
-    row = cur.fetchone()
-    if row:
-        return row["person_id"]
-    else:
-        cur.execute("INSERT INTO Person (full_name) VALUES (?)", (full_name,))
-        if cur.lastrowid is None:
-            raise Exception("Failed to insert person, lastrowid is None")
-        return cur.lastrowid
+    cur.execute(
+        "SELECT 1 FROM PersonIdentifier WHERE person_id = ? AND identifier_type = ? AND identifier = ? AND domain = ?",
+        (person_id, identifier_type, identifier, domain),
+    )
+    if cur.fetchone():
+        return
+    cur.execute(
+        "INSERT INTO PersonIdentifier (person_id, domain, identifier_type, identifier) VALUES (?, ?, ?, ?)",
+        (person_id, domain, identifier_type, identifier),
+    )
 
 
-def insert_if_not_exists_person_username(
-    conn: sqlite3.Connection, person_id: int, domain: str, username: str
+def ensure_person(conn: sqlite3.Connection, full_name: Optional[str]) -> int:
+    """
+    Find a person by identifier if provided, otherwise by full_name. If not found, create a new Person.
+    If an identifier is provided, ensure it is recorded in PersonIdentifier for the returned person_id.
+    """
+    cur = conn.cursor()
+
+    if full_name:
+        cur.execute("SELECT person_id FROM Person WHERE full_name = ?", (full_name,))
+        row = cur.fetchone()
+        if row:
+            person_id = row[0]
+            return person_id
+
+    # Create new person
+    cur.execute("INSERT INTO Person (full_name) VALUES (?)", (full_name,))
+    if cur.lastrowid is None:
+        raise Exception("Failed to insert person, lastrowid is None")
+    person_id = cur.lastrowid
+
+    return person_id
+
+
+def ensure_person_organisation(
+    conn: sqlite3.Connection, person_id: int, organisation_name: str
 ):
     cur = conn.cursor()
     cur.execute(
-        "SELECT username FROM PersonUsername WHERE person_id = ? AND domain = ? AND username = ?",
-        (person_id, domain, username),
+        "SELECT organisation_id FROM Organisation WHERE organisation_name = ?",
+        (organisation_name,),
     )
     row = cur.fetchone()
+    organisation_id = None
     if row:
-        return
+        organisation_id = row[0]
     else:
         cur.execute(
-            "INSERT INTO PersonUsername (person_id, domain, username) VALUES (?, ?, ?)",
-            (person_id, domain, username),
+            "INSERT INTO Organisation (organisation_name) VALUES (?)",
+            (organisation_name,),
         )
-        if cur.lastrowid is None:
-            raise Exception("Failed to insert person username, lastrowid is None")
-        return
+        organisation_id = cur.lastrowid
+    cur.execute(
+        "INSERT OR IGNORE INTO Affiliation (person_id, organisation_id) VALUES (?, ?)",
+        (person_id, organisation_id),
+    )
 
 
 def insert_comment(
@@ -196,6 +224,7 @@ def insert_comment(
     content: str,
 ) -> int:
     cur = conn.cursor()
+    created_at_val = created_at.isoformat() if created_at is not None else None
     cur.execute(
         "INSERT INTO Comment (author_id, project_id, proposal_id, comment_on_comment_id, created_at, content) VALUES (?, ?, ?, ?, ?, ?)",
         (
@@ -203,7 +232,7 @@ def insert_comment(
             project_id,
             proposal_id,
             comment_on_comment_id,
-            created_at,
+            created_at_val,
             content,
         ),
     )

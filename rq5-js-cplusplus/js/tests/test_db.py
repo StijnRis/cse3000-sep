@@ -1,12 +1,18 @@
 import datetime
 import json
 import sqlite3
+from glob import glob
 
 
-DB_PATH = "./js/output/js_proposals.sqlite3"
+def get_most_recent_db_path() -> str:
+    files = glob("js/output/js_proposals_*.sqlite3")
+    if not files:
+        raise FileNotFoundError("No database files found for project js")
+    return max(files)
+
 
 def test_temporal_proposal():
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(get_most_recent_db_path())
     cur = conn.cursor()
 
     proposal = cur.execute(
@@ -17,26 +23,30 @@ def test_temporal_proposal():
     ).fetchone()
     assert proposal is not None, "Temporal proposal not found in database"
     assert proposal[0] == 3
-    assert proposal[1] == "Temporal", f"Expected proposal_id 'Temporal', got '{proposal[1]}'"
-    assert proposal[2] == None
-    assert proposal[3] == None
+    assert proposal[1] == "Temporal", (
+        f"Expected proposal_id 'Temporal', got '{proposal[1]}'"
+    )
+    assert proposal[2] is None
+    assert proposal[3] is None
 
-    proposalRevisions = cur.execute(
+    proposal_revisions = cur.execute(
         """
         SELECT * FROM ProposalRevision
         WHERE proposal_id = 'Temporal'
-        ORDER BY created_at ASC;
+        ORDER BY created_at ASC
+        LIMIT 1;
         """
     ).fetchall()
-    assert len(proposalRevisions) > 0, "No revisions found for Temporal proposal"
+    assert len(proposal_revisions) > 0, "No revisions found for Temporal proposal"
+    proposal_revision = proposal_revisions[0]
 
-    assert proposalRevisions[-1][0] == 3
-    assert proposalRevisions[-1][1] == "Temporal"
-    assert proposalRevisions[-1][2] != None 
-    assert proposalRevisions[-1][3] == "Temporal"
-    assert proposalRevisions[-1][4] == "2026-04-03 09:23:09-07:00"
-    assert proposalRevisions[-1][5].startswith("<!DOCTYPE html>")
-    assert proposalRevisions[-1][5].endswith('<emu-import href="spec/intl.html"></emu-import>\n')
+    assert proposal_revision[0] == 3
+    assert proposal_revision[1] == "Temporal"
+    assert proposal_revision[2] is not None
+    assert proposal_revision[3] == "Temporal"
+    assert proposal_revision[4] == "2017-03-13T12:44:31-07:00"
+    assert proposal_revision[5].startswith("### Temporal Proposal")
+    assert proposal_revision[5].endswith("(ex: 3 months)\n")
 
     comments = cur.execute(
         """
@@ -48,6 +58,13 @@ def test_temporal_proposal():
 
     assert len(comments) > 100
 
+    comment = comments[0]
+    assert comment[2] == 3
+    assert comment[3] == "Temporal"
+    assert comment[4] is None
+    assert comment[5] == "2018-09-27T00:00:00"
+    assert comment[6].startswith("This API is quite large, but we won't ")
+
     author_id = comments[0][1]
     author = cur.execute(
         """
@@ -58,17 +75,13 @@ def test_temporal_proposal():
     ).fetchone()[0]
 
     assert author[0] == "M"
-    assert comments[0][2] == 3
-    assert comments[0][3] == "Temporal"
-    assert comments[0][4] == None
-    assert comments[0][5] == "2018-09-27 00:00:00"
-    assert comments[0][6].startswith("This API is quite large, but we won't ")
 
     stageHistory = cur.execute(
         """
-        SELECT * FROM StageHistory
+        SELECT * FROM ProposalStatus
         WHERE proposal_id = 'Temporal'
-        ORDER BY created_at ASC;
+        ORDER BY created_at ASC
+        LIMIT 1;
         """
     ).fetchall()
 
@@ -78,22 +91,24 @@ def test_temporal_proposal():
     assert stageHistory[0][2] == 0
     assert stageHistory[0][3] == "Stage 1"
     assert stageHistory[0][4] == "draft"
-    assert stageHistory[0][5] == "2017-04-03 04:21:18"
+    assert stageHistory[0][5] == "2017-04-03T04:21:18"
 
     conn.close()
 
 
 def test_meeting_notes():
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(get_most_recent_db_path())
     cur = conn.cursor()
 
-    with open("js/data/comments.json", "r", encoding="utf-8") as f:
+    with open("js/tests/data/comments.json", "r", encoding="utf-8") as f:
         meeting_notes = json.load(f)
 
     for meeting_note in meeting_notes:
         proposal_id = meeting_note["proposal_id"]
         true_comments = meeting_note["comments"]
-        date_obj = datetime.datetime.fromisoformat(meeting_note["date"].rstrip("Z")) - datetime.timedelta(days=1)
+        date_obj = datetime.datetime.fromisoformat(
+            meeting_note["date"].rstrip("Z")
+        ) - datetime.timedelta(days=1)
         date_str = date_obj.isoformat()
 
         # get comments from the proposal
@@ -103,7 +118,7 @@ def test_meeting_notes():
             WHERE proposal_id = ? AND created_at >= ?
             ORDER BY created_at ASC;
             """,
-            (proposal_id,date_str),
+            (proposal_id, date_str),
         ).fetchall()
 
         # check if the comment content matches the meeting note content
@@ -120,14 +135,16 @@ def test_meeting_notes():
                 """,
                 (author_id,),
             ).fetchone()[0]
-            assert author[0] == true_comment["author"], f"Comment author does not match for proposal {proposal_id} at index {index}"
-            assert true_comment["content"] == comment[1], f"Comment content does not match for proposal {proposal_id} at index {index}"
+            assert author[0] == true_comment["author"], (
+                f"Comment author does not match for proposal {proposal_id} at index {index}"
+            )
+            assert true_comment["content"] == comment[1], (
+                f"Comment content does not match for proposal {proposal_id} at index {index}"
+            )
 
     conn.close()
-
 
 
 if __name__ == "__main__":
     test_temporal_proposal()
     test_meeting_notes()
-    

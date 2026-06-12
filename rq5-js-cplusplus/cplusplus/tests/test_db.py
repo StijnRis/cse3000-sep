@@ -1,13 +1,19 @@
+import glob
 import json
-from pathlib import Path
 import sqlite3
+from pathlib import Path
 
-DB_PATH = "cplusplus/output/cplusplus_proposals.sqlite3"
+
+def get_most_recent_db_path() -> str:
+    files = glob.glob("cplusplus/output/cplusplus_proposals_*.sqlite3")
+    if not files:
+        raise FileNotFoundError("No database files found for project cplusplus")
+    return max(files)
 
 
 def test_proposal_counts():
 
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(get_most_recent_db_path())
 
     files = list(Path("cplusplus/data").glob("ids_*.txt"))
 
@@ -34,8 +40,9 @@ def test_proposal_counts():
         assert not extra, f"Extra proposals for year {year}: {extra}"
     conn.close()
 
+
 def test_malformed_ids():
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(get_most_recent_db_path())
     cur = conn.cursor()
     cur.execute(
         """
@@ -52,10 +59,10 @@ def test_malformed_ids():
 
 def test_comments():
 
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(get_most_recent_db_path())
     cur = conn.cursor()
 
-    with open("cplusplus/data/comments.json", "r", encoding="utf-8") as f:
+    with open("cplusplus/tests/data/comments.json", "r", encoding="utf-8") as f:
         comments = json.load(f)
     for expected_comment in comments:
         comment = cur.execute(
@@ -99,9 +106,9 @@ def test_comments():
     conn.close()
 
 
-def test_all_number_exist():
+def test_all_comment_numbers_exist():
     # get all ids from database, then check if ther are any missing numbers in the sequence
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(get_most_recent_db_path())
     cur = conn.cursor()
     ids = cur.execute(
         """
