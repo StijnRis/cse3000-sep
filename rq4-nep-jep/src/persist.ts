@@ -310,5 +310,5 @@ export const dumpDatabase = async (dataSource: DataSource, db: Database) => {
   await dataSource.getRepository(ProposalRevisionSQL).save(db.proposal_revision.values().toArray(), { chunk: 500 });
   await dataSource.getRepository(ProposalStatusSQL).save(db.proposal_status.values().toArray(), { chunk: 500 });
   await dataSource.getRepository(RelatedProposalSQL).save(db.related_proposal.values().toArray());
-  await dataSource.getRepository(CommentSQL).save(db.comment.values().toArray());
+  await dataSource.getRepository(CommentSQL).save(db.comment.values().toArray(), { chunk: 500 });
 };

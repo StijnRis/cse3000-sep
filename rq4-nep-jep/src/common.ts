@@ -3,7 +3,7 @@ import { XMLParser } from 'fast-xml-parser';
 import { readFileSync, existsSync } from 'node:fs';
 import { Readable } from 'node:stream';
 import efs from 'fs-extra';
-const { outputFileSync } = efs;
+const { outputFileSync, readJSONSync, outputJSONSync } = efs;
 import type { SEP, GithubUser, GithubUserJSON, GithubComment, GithubCommentJSON, Email, GithubOrganisation } from '../types.d.ts';
 import { mboxParser, ParsedMail } from 'mbox-parser';
 
@@ -102,14 +102,6 @@ export const githubIssueAPI = (owner: string, repo: string, issueID: number) => 
 export const githubCommitsForPathAPI = (owner: string, repo: string, path: string) => `${githubRepoAPI(owner, repo)}/commits?path=${path}`;
 export const githubCommitAPI = (owner: string, repo: string, ref: string) => `${githubRepoAPI(owner, repo)}/commits/${ref}`;
 
-export const pythonMailListURL = (list: string, threadID: string, fileName: string) =>
-  `mail.python.org/archives/list/${list}@python.org/export/${fileName}.mbox.gz?thread=${threadID}`;
-export const pythonMailIntervalURL = (list: string,
-  fromYear: number, fromMonth: number, fromDay: number,
-  toYear: number, toMonth: number, toDay: number,
-  fileName: string
-) => `mail.python.org/archives/list/${list}@python.org/export/${fileName}.mbox.gz?start=${fromYear}-${fromMonth}-${fromDay}&end=${toYear}-${toMonth}-${toDay}`;
-
 const ghHeaders: HeadersInit = {
   'Accept': 'application/vnd.github+json',
   'X-Github-Api-Version': process.env.GITHUB_API_VERSION!,
@@ -151,11 +143,40 @@ export const parseGithubCommentJSON = async ({
   body,
 });
 
+/**
+ * URL to fetch a given mailing list from a HyperKitty instance
+ * @param domain domain that hosts mail archive
+ * @param list mailing list name
+ * @param fileName name of resulting file
+ * @returns string URL
+ */
+export const mailListAPI = (domain: string, list: string, fileName: string) =>
+  `${domain}/archives/list/${list}/export/${fileName}.mbox.gz`;
+/**
+ * URL to fetch mail in a given interval from a HyperKitty instance
+ * @param domain domain that hosts mail archive
+ * @param list mailing list name
+ * @param fromYear start year
+ * @param fromMonth start month (1-12)
+ * @param fromDay start day
+ * @param toYear end year
+ * @param toMonth end month (1-12)
+ * @param toDay end date
+ * @param fileName name of resulting file
+ * @returns string URL
+ */
+export const mailIntervalAPI = (domain: string, list: string,
+  fromYear: number, fromMonth: number, fromDay: number,
+  toYear: number, toMonth: number, toDay: number,
+  fileName: string
+) => `${mailListAPI(domain, list, fileName)}?start=${fromYear}-${fromMonth}-${fromDay}&end=${toYear}-${toMonth}-${toDay}`;
+
 export const parseMboxEmail = ({
   messageId,
   inReplyTo,
   from,
   date,
+  subject,
   text,
 }: ParsedMail): Email => ({
   id: messageId!,
@@ -165,19 +186,30 @@ export const parseMboxEmail = ({
     name: from!.value[0].name,
   },
   created: date!,
+  subject,
   body: text!,
 });
 
 /**
  * Get an archive of emails in mbox format and parse them
+ * Caches result of parsing to save time
  * @param url URL returning a .mbox.gz file
  * @param cacheDir cache folder
  * @returns list of parsed email objects
  */
-export const fetchEmails = async (url: string, cacheDir: string): Promise<ParsedMail[]> => {
+export const fetchEmails = async (url: string, cacheDir: string): Promise<Email[]> => {
+  const outputCache = cachePath(`${cacheDir}/parsed_mails`, url, 'json');
+  if(cacheDir && existsSync(outputCache)) {
+    return readJSONSync(outputCache, { encoding: 'utf8', reviver: (k, v) => k === 'created' ? new Date(v) : v });
+  }
   const gzBlob = await fetchFile(url, 'gz', cacheDir);
   const unpacked = gzBlob.stream().pipeThrough(new DecompressionStream('gzip'));
-  return await mboxParser(Readable.from(unpacked));
+  const mboxMails = await mboxParser(Readable.from(unpacked));
+  const res = mboxMails.map(parseMboxEmail);
+  if(cacheDir) {
+    outputJSONSync(outputCache, res, 'utf8');
+  }
+  return res;
 }
 
 /**

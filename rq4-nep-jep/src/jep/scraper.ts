@@ -2,8 +2,8 @@ import { HTMLElement } from 'node-html-parser';
 import { XMLParser } from "fast-xml-parser";
 import efs from 'fs-extra';
 const { outputJSONSync } = efs;
-import { fetchHTMLParsed, fetchJSONParsed, fetchXMLParsed } from "../common.ts";
-import type { SEP } from '../../types.js';
+import { fetchEmails, fetchHTMLParsed, fetchJSONParsed, fetchXMLParsed, mailIntervalAPI, mailListAPI } from "../common.ts";
+import type { Email, SEP } from '../../types.js';
 import { sortedBy } from '../util.ts';
 
 //NOTE: all JEPs have issue IDs (long number), they get a JEP ID (short number) when they pass the draft phase
@@ -14,6 +14,14 @@ const jepIssueBaseURL = 'bugs.openjdk.org/';
 const jepXMLURL = (issueID: number) => `${jepIssueBaseURL}si/jira.issueviews:issue-xml/JDK-${issueID}/JDK-${issueID}.xml`;
 // const jepPrintableURL = (issueID: number) => `${jepIssueBaseURL}si/jira.issueviews:issue-html/JDK-${issueID}/JDK-${issueID}.html`;
 const jepJIRAIssueURL = (issueID: number) => `${jepIssueBaseURL}rest/api/2/issue/JDK-${issueID}?expand=changelog`;
+
+export const jepMailListURL = (listName: string, fileName: string) =>
+  mailListAPI('mail.openjdk.org', `${listName}@openjdk.org`, fileName);
+export const jepMailIntervalURL = (listName: string,
+  fromYear: number, fromMonth: number, fromDay: number,
+  toYear: number, toMonth: number, toDay: number,
+  fileName: string
+) => mailIntervalAPI('mail.openjdk.org', `${listName}@openjdk.org`, fromYear, fromMonth, fromDay, toYear, toMonth, toDay, fileName);
 
 /**
  * Fetch IDs of all JEPs
@@ -35,8 +43,9 @@ export type OpenJDKUser = {
   username: string,
   name: string,
 };
-type JEPComment = {
-  id: number,
+export type JEPComment = Email | {
+  id: string,
+  replyTo?: string,
   author: OpenJDKUser,
   created: Date,
   content: string,
@@ -118,7 +127,7 @@ const jepXMLParser = new XMLParser({
 const parseJEPComments = (issueJSON: JEPJIRAIssueJSON): JEPComment[] => {
   return issueJSON.fields.comment.comments
     .map(({ id, author, created, body }) => ({
-      id: parseInt(id),
+      id,
       author: {
         username: author.name,
         name: author.displayName,
@@ -127,6 +136,28 @@ const parseJEPComments = (issueJSON: JEPJIRAIssueJSON): JEPComment[] => {
       content: body,
     }));
 }
+
+/**
+ * Collect emails from a mailing list that belong to given JEP
+ * @param id JEP ID
+ * @param listName name of mailing list
+ * @param cacheDir cache folder
+ * @returns all emails in the list whose title mentions the JEP
+ */
+const collectJEPEmails = async (id: number, listName: string, cacheDir: string): Promise<Email[]> => {
+  let allEmails;
+  if(listName === 'core-libs-dev') { // this list is too big to get in one piece
+    const years = Array(2027).keys().toArray().slice(2007);
+    const yearLists = await Promise.all(years.map(y => fetchEmails(jepMailIntervalURL(
+      listName, y, 1, 1, y, 12, 31, `${listName}${y}`
+    ), cacheDir)));
+    allEmails = yearLists.flat();
+  } else {
+    allEmails = await fetchEmails(jepMailListURL(listName, listName), cacheDir);
+  }
+  return allEmails.filter(({ subject }) => subject?.toLowerCase().match(/^jep[^a-z]|[^a-z]jep[^a-z]|[^a-z]jep$/)
+    && subject.match(`^${id}[^0-9]|[^0-9]${id}[^0-9]|[^0-9]${id}$`));
+};
 
 /**
  * Get value of a custom field, according to the exported XML schema
@@ -158,6 +189,7 @@ const parseJEP = async (id: number, supersederID: number | undefined, html: HTML
     'Status': HTMLElement,
     'Release'?: HTMLElement,
     'Relates to'?: HTMLElement,
+    'Discussion'?: HTMLElement,
     'Issue': HTMLElement,
   } = Object.fromEntries(
     html.querySelector('.head')!
@@ -172,7 +204,19 @@ const parseJEP = async (id: number, supersederID: number | undefined, html: HTML
   const type = getJEPXMLField(jepXML, 'JEP Type')![0]['#text'];
   // const printablePage = await fetchHTMLParsed(jepPrintableURL(issueID), cacheDir);
   // const ownerCell = printablePage.querySelectorAll('table.grid')[1].querySelector('span.user-hover');
+
   const comments = parseJEPComments(issueJSON);
+
+  const discussion = metadata['Discussion'];
+  if(discussion) {
+    const mailListName = discussion.text
+      .replace(/ at .*$/, '')
+      .replaceAll(/ dash /g, '-')
+      .replace('hostspot', 'hotspot').trim();
+    const parsedMails = await collectJEPEmails(id, mailListName, cacheDir);
+    comments.push(...parsedMails);
+  }
+
   return {
     id,
     issueID,

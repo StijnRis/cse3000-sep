@@ -1,7 +1,7 @@
 import { HTMLElement } from 'node-html-parser';
 import efs from 'fs-extra';
 const { outputJSONSync } = efs;
-import { fetchEmails, fetchHTMLParsed, fetchJSONParsed, fetchText, ghAuthHeaders, githubCommitAPI, githubCommitsForPathAPI, githubIssueAPI, githubPullAPI, parseGithubCommentJSON, parseMboxEmail, pythonMailIntervalURL, pythonMailListURL } from '../common.ts';
+import { fetchEmails, fetchHTMLParsed, fetchJSONParsed, fetchText, ghAuthHeaders, githubCommitAPI, githubCommitsForPathAPI, githubIssueAPI, githubPullAPI, mailIntervalAPI, mailListAPI, parseGithubCommentJSON } from '../common.ts';
 import type { SEP, EmailUser, Email, GithubComment, GithubCommentJSON, GithubCommit, GithubCommitDetailed } from '../../types.js';
 
 const nepBaseURL = 'numpy.org/neps/';
@@ -50,6 +50,12 @@ export type NEP = SEP<NEPType, NEPComment> & {
 };
 export const isGithubComment = (comm: NEPComment): comm is GithubComment => Object.hasOwn(comm.author, 'login');
 
+/**
+ * Gets revisions of given NEP based on github file history
+ * @param strID ID of NEP
+ * @param cacheDir cache folder
+ * @returns list of revisions
+ */
 const collectNEPRevisions = async (strID: string, cacheDir: string): Promise<NEPRevision[]> => {
   const githubFile = githubPathToFile(strID);
   const changingCommits = await fetchJSONParsed<GithubCommit[]>(
@@ -97,6 +103,14 @@ const collectNEPRevisions = async (strID: string, cacheDir: string): Promise<NEP
   });
 };
 
+const pythonMailThreadURL = (list: string, threadID: string, fileName: string) =>
+  `${mailListAPI('mail.python.org', `${list}@python.org`, fileName)}?thread=${threadID}`;
+const pythonMailIntervalURL = (list: string,
+  fromYear: number, fromMonth: number, fromDay: number,
+  toYear: number, toMonth: number, toDay: number,
+  fileName: string
+) => mailIntervalAPI('mail.python.org', `${list}@python.org`, fromYear, fromMonth, fromDay, toYear, toMonth, toDay, fileName);
+
 /**
  * Collects comments that can be found under a given URL
  * Tries one of multiple scraping strategies (email, github) depending on URL
@@ -112,9 +126,8 @@ const collectNEPComments = async (url: string, cacheDir: string): Promise<NEPCom
    * @returns list of email objects in thread
    */
   const collectArchiveEmails = async (threadID: string): Promise<Email[]> => {
-    const mailAPI = pythonMailListURL('numpy-discussion', threadID, threadID);
-    const mails = await fetchEmails(mailAPI, cacheDir);
-    return mails.map(parseMboxEmail);
+    const mailAPI = pythonMailThreadURL('numpy-discussion', threadID, threadID);
+    return await fetchEmails(mailAPI, cacheDir);
   };
 
   /**
@@ -138,8 +151,7 @@ const collectNEPComments = async (url: string, cacheDir: string): Promise<NEPCom
     );
     const mails = await fetchEmails(intervalAPI, cacheDir);
     return mails
-      .filter(m => m.subject?.toLowerCase().includes(title))
-      .map(parseMboxEmail);
+      .filter(m => m.subject?.toLowerCase().includes(title));
   }
 
   /**

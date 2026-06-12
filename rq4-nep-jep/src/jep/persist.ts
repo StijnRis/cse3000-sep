@@ -1,8 +1,11 @@
-import { Persister, realNameDomain, RelatedProposalSQL } from "../persist.ts"; 
-import type { JEP } from "./scraper.ts";
+import { Persister, RelatedProposalSQL } from "../persist.ts"; 
+import type { JEP, JEPComment } from "./scraper.ts";
 import { sortedBy } from "../util.ts";
+import type { Email } from "../../types.d.ts";
 
 const openjdkDomain = 'openjdk.org';
+
+const isEmail = (comm: JEPComment): comm is Email => Object.hasOwn(comm.author, 'email');
 
 export class JEPPersister extends Persister<JEP> {
   project = {
@@ -54,8 +57,10 @@ export class JEPPersister extends Persister<JEP> {
         this.addPersonDetails(person_id, openjdkDomain, 'display_name', revision.author.name);
       }
       for(const comment of sortedBy(jep.comments, c => c.id)) {
-        const {person_id} = this.ensurePerson(openjdkDomain, 'username', comment.author.username, comment.author.name);
-        this.addPersonDetails(person_id, openjdkDomain, 'username', comment.author.username);
+        const identifierType = isEmail(comment) ? 'email' : 'username';
+        const identifier = isEmail(comment) ? comment.author.email : comment.author.username;
+        const {person_id} = this.ensurePerson(openjdkDomain, identifierType, identifier, comment.author.name);
+        this.addPersonDetails(person_id, openjdkDomain, identifierType, identifier);
         this.addPersonDetails(person_id, openjdkDomain, 'display_name', comment.author.name);
       }
     }
@@ -66,6 +71,14 @@ export class JEPPersister extends Persister<JEP> {
   // }
 
   persistSEPs(jeps: JEP[]) {
+    // making internal IDs for comments
+    const commentToID = new Map<string, number>()
+    for(const jep of jeps) {
+      for(const comm of sortedBy(jep.comments, c => c.id)) {
+        commentToID.set(comm.id, this.generateNumID(commentToID.size));
+      }
+    }
+
     for(const jep of jeps) {
       const id = `${jep.id}`;
       const proposal = {
@@ -150,8 +163,10 @@ export class JEPPersister extends Persister<JEP> {
       }
 
       for(const comment of sortedBy(jep.comments, c => c.id)) {
-        const newID = this.generateNumID(this.db.comment.size);
-        const author = this.db.person.get(this.personDetailsToID.get(`${openjdkDomain} username ${comment.author.username}`)!)!;
+        const newID = commentToID.get(comment.id)!;
+        const identifierType = isEmail(comment) ? 'email' : 'username';
+        const identifier = isEmail(comment) ? comment.author.email : comment.author.username;
+        const author = this.db.person.get(this.personDetailsToID.get(`${openjdkDomain} ${identifierType} ${identifier}`)!)!;
         this.db.comment.set(newID, {
           comment_id: newID,
           author_id: author.person_id,
@@ -160,7 +175,10 @@ export class JEPPersister extends Persister<JEP> {
           proposal_id: proposal.proposal_id,
           proposal,
           created_at: comment.created.toISOString(),
-          content: comment.content,
+          comment_on_comment_id: comment.replyTo !== undefined
+            ? commentToID.get(comment.replyTo)
+            : undefined,
+          content: isEmail(comment) ? comment.body : comment.content,
         });
       }
     }

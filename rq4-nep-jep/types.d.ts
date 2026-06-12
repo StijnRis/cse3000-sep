@@ -29,7 +29,9 @@ export type Comment<ID, A> = {
   created: Date,
   body: string,
 };
-export type Email = Comment<string, EmailUser>;
+export type Email = Comment<string, EmailUser> & {
+  subject?: string,
+};
 export type GithubComment = Comment<number, GithubUser>;
 
 export type GithubCommentJSON = {
