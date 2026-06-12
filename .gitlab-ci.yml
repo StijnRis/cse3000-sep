@@ -6,12 +6,27 @@ rq3-kep-keep:
   trigger:
     include:
       - local: rq3-kep-keep/.gitlab-ci.yml
-    strategy: depend   # parent pipeline fails if the child fails
+    strategy: depend # parent pipeline fails if the child fails
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
         - rq3-kep-keep/**/*
-    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+    - if: "$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH"
       changes:
         - rq3-kep-keep/**/*
-    - if: '$CI_PIPELINE_SOURCE == "web"'   # allow manual runs from the UI
+    - if: '$CI_PIPELINE_SOURCE == "web"' # allow manual runs from the UI
+
+rq5-js-cplusplus:
+  stage: triggers
+  trigger:
+    include:
+      - local: rq5-js-cplusplus/.gitlab-ci.yml
+    strategy: depend # parent pipeline fails if the child fails
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - rq5-js-cplusplus/**/*
+    - if: "$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH"
+      changes:
+        - rq5-js-cplusplus/**/*
+    - if: '$CI_PIPELINE_SOURCE == "web"'
