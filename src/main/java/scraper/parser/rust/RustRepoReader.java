@@ -85,7 +85,7 @@ public class RustRepoReader extends RepoReader {
 
                 //Some safeties to avoid weird states with missing files and existing authors.
                 int index = 0;
-                while (file == null && index < commits.size()) {
+                while (file == null && index < prc.getFiles().length) {
                     try {
                         file = getFileFromAPI(OWNER, REPO, commit.getSha(), prc.getFiles()[index].getFilename());
                     } catch(Exception e) {} //silent fail

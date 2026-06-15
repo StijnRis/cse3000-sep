@@ -69,7 +69,7 @@ public class SwiftDataReader extends DataReader {
             revision = parser.createRevisionFromCommit(proposal, pr, sequence);
         } catch (Exception e) {
             //Retrieve from online only if NON SE
-            if(proposal.getId().getProposalId().startsWith("SE")) return null;
+            //if(proposal.getId().getProposalId().startsWith("SE")) return null;
             sr.setAuthorIndex(authorIndex);
             revision = sr.createRevision(proposal, pr, sequence);
             authorIndex = sr.getAuthorIndex();
