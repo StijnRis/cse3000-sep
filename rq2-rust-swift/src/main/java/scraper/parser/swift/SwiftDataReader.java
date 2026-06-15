@@ -39,10 +39,12 @@ public class SwiftDataReader extends DataReader {
             Log.log("Git: Started on " + proposal.getId().getProposalId());
 
             List<GitHubService.PullRequest> pullRequests = proposal.getPullRequests();
+            int revisionIndex = 0;
             for (int i = 0; i < pullRequests.size(); i++) {
                 GitHubService.PullRequest pr = pullRequests.get(i);
                 try {
-                    createRevisionFromPR(proposal, pr, i);
+                    ProposalRevision rev = createRevisionFromPR(proposal, pr, revisionIndex);
+                    if(rev != null) revisionIndex++;
                     success++;
                 } catch (Exception e) {
                     Log.warn("Git: Failed reading history for " + proposal.getId().getProposalId());
@@ -59,7 +61,7 @@ public class SwiftDataReader extends DataReader {
         Log.log(String.format("Swift Parsing: %s completed, %s failed. Failure rate: %s", success, failure, r));
     }
 
-    public void createRevisionFromPR(Proposal proposal, GitHubService.PullRequest pr, int sequence) throws IOException {
+    public ProposalRevision createRevisionFromPR(Proposal proposal, GitHubService.PullRequest pr, int sequence) throws IOException {
         SwiftDataParser parser = new SwiftDataParser(repository, project, pr.getHead().getSha(), authorIndex);
 
         ProposalRevision revision;
@@ -67,7 +69,7 @@ public class SwiftDataReader extends DataReader {
             revision = parser.createRevisionFromCommit(proposal, pr, sequence);
         } catch (Exception e) {
             //Retrieve from online only if NON SE
-            if(proposal.getId().getProposalId().startsWith("SE")) return;
+            //if(proposal.getId().getProposalId().startsWith("SE")) return null;
             sr.setAuthorIndex(authorIndex);
             revision = sr.createRevision(proposal, pr, sequence);
             authorIndex = sr.getAuthorIndex();
@@ -86,6 +88,7 @@ public class SwiftDataReader extends DataReader {
         }
 
         proposalRevisions.add(revision);
+        return revision;
     }
 
     public void createProposalIndex() throws IllegalArgumentException {
@@ -126,14 +129,13 @@ public class SwiftDataReader extends DataReader {
         Scanner scanner = new Scanner(file);
         if(file.getName().startsWith("0443")) scanner.nextLine(); //hardcoded single exception....
 
-        String title = scanner.nextLine().substring(2);
         String id = SwiftDataParser.getIdFromContent(scanner);
         String pitch = SwiftDataParser.getPitchFromContent(new  Scanner(file));
 
         return Proposal.create(session,
                 project,
                 id,
-                title,
+                "",
                 "",
                 file.getName().substring(5), //remove XXXX-
                 new ArrayList<>(),

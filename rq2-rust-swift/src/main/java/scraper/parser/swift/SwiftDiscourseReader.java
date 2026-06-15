@@ -103,17 +103,15 @@ public class SwiftDiscourseReader {
 
     private static NormalizedStatus getNormalizedStatus(String rawStatus) {
         NormalizedStatus status = NormalizedStatus.unknown;
-        if (rawStatus.contains("accepted")) {
+        if (rawStatus.contains("accepted") || rawStatus.contains("amended") || rawStatus.contains("amendment")) {
             status = NormalizedStatus.accepted;
         } else if (rawStatus.contains("rejected")) {
             status = NormalizedStatus.rejected;
         } else if (rawStatus.contains("review") || rawStatus.contains("deferred")) {
             status = NormalizedStatus.review;
-        } else if (rawStatus.contains("returned") || rawStatus.contains("amended") || rawStatus.contains("amendment")) {
-            status = NormalizedStatus.superseded;
         } else if (rawStatus.contains("withdrawn") || rawStatus.contains("revision")) {
             status = NormalizedStatus.withdrawn;
-        } else if (rawStatus.contains("expired")) {
+        } else if (rawStatus.contains("expired") || rawStatus.contains("returned")) {
             status = NormalizedStatus.draft;
         }
         return status;
@@ -233,7 +231,7 @@ public class SwiftDiscourseReader {
             Person author = sdr.getOrCreateAuthor(user.name, "");
             PersonIdentifier.createIfMissing(session, author, "swift.org", "username", user.username);
 
-            pr = Proposal.create(session, project, id, topic.getTitle(),
+            pr = Proposal.create(session, project, id, "",
                     "", null, null, null);
             proposals.add(pr);
         }

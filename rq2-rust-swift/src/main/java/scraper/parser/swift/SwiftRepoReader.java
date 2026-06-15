@@ -53,8 +53,8 @@ public class SwiftRepoReader extends RepoReader {
                     continue;
                 }
 
-                //Filters out some bad "changed whitespace" PRs, though some PRs contain 2 or 3 changes
-                if(filepaths.size() > 3) {
+                //Filters out some bad "changed whitespace" PRs, though some PRs contain a few changes
+                if(filepaths.size() > 6) {
                     Log.warn("GitHub Scraping: Skipping " + pr.getNumber() + " Many files included, this is likely a restructuring commit.");
                 }
 
@@ -134,7 +134,7 @@ public class SwiftRepoReader extends RepoReader {
         String title = getTitleSafe(content);
         String id = getNewFallbackId();
 
-        Proposal p = Proposal.create(session, project, id, title, "", fileIdentifier, new ArrayList<>(), pr.getHead().getSha());
+        Proposal p = Proposal.create(session, project, id, "", "", fileIdentifier, new ArrayList<>(), pr.getHead().getSha());
         proposals.add(p);
         return p;
     }

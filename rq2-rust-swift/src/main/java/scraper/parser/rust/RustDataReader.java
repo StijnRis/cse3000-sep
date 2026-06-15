@@ -70,7 +70,7 @@ public class RustDataReader extends DataReader {
         try {
             revisions = parser.createRevisionHistory();
             authorIndex = parser.authorIndex;
-        } catch (MissingObjectException mOE) {
+        } catch (Exception mOE) {
             //Retrieve from online
             rr.setAuthorIndex(authorIndex);
             revisions = rr.createRevisionHistory(proposal);
