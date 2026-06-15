@@ -12,3 +12,5 @@ wheels/
 .env
 
 output/
+.pytest_cache/
+.ruff_cache/

@@ -21,7 +21,9 @@ def show_table_counts_for_project(db_path: str):
     conn.close()
 
 
-def plot_proposals_per_year(db_path: str, project_id: str, project_name: str, save_path: str):
+def plot_proposals_per_year(
+    db_path: str, project_id: str, project_name: str, save_path: str
+):
     conn = sqlite3.connect(db_path)
     cur = conn.cursor()
 
@@ -63,10 +65,11 @@ def plot_proposals_per_year(db_path: str, project_id: str, project_name: str, sa
 
     fig.savefig(save_path)
 
-if __name__ == "__main__":
+
+def main():
     items = [
         {
-            "db_path": "js/output/js_proposals.db",
+            "db_path": "js/output/js_proposals_2026-06-01.sqlite3",
             "project_id": 1,
             "project_name": "JavaScript",
             "save_path": "js/output/plots",
@@ -92,9 +95,7 @@ if __name__ == "__main__":
         # Make sure save_path directory exists
         Path(item["save_path"]).mkdir(parents=True, exist_ok=True)
 
-        show_table_counts_for_project(
-            db_path=item["db_path"]
-        )
+        show_table_counts_for_project(db_path=item["db_path"])
 
         plot_proposals_per_year(
             db_path=item["db_path"],
@@ -102,3 +103,7 @@ if __name__ == "__main__":
             project_id=item["project_id"],
             save_path=item["save_path"] + "/proposals_per_year.png",
         )
+
+
+if __name__ == "__main__":
+    main()

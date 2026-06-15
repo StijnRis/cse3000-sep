@@ -38,16 +38,18 @@ def test_proposal_counts():
 
 
 def test_proposals():
-    with open("cplusplus/data/proposals.json", "r") as f:
+    with open("cplusplus/tests/data/proposals.json", "r") as f:
         expected_proposals = json.load(f)
         for expected_proposal in expected_proposals:
             proposal_id = expected_proposal["proposal_id"]
 
-            found_in_list_of_years = expected_proposal["found_in_list_of_years"]
-            proposals: dict[str, Proposal] = {}
-            for year in found_in_list_of_years:
-                proposals.update(scrape_year(proposals, year))
-            proposal = proposals[proposal_id]
+            proposal = Proposal(proposal_id="", revisions=[], stages=[], subgroup="")
+            if "found_in_list_of_years" in expected_proposal:
+                found_in_list_of_years = expected_proposal["found_in_list_of_years"]
+                proposals: dict[str, Proposal] = {}
+                for year in found_in_list_of_years:
+                    proposals.update(scrape_year(proposals, year))
+                proposal = proposals[proposal_id]
 
             if "amount_of_revisions" in expected_proposal:
                 expected_count = expected_proposal["amount_of_revisions"]
@@ -83,19 +85,19 @@ def test_proposals():
                 )
                 dates = set()
                 for revision in proposal.revisions:
-                    dates.add(revision.created_at.strftime("%Y-%m-%d %H:%M:%S"))
+                    dates.add(revision.created_at.isoformat())
                 assert dates == expected_dates, (
                     f"Proposal {proposal_id} has dates '{dates}', expected '{expected_dates}'"
                 )
 
 
-def test_stages():
+def test_statusses():
     # Not feasible to unit test as everything will have to be fetched for this
     pass
 
 
 def test_content():
-    with open("cplusplus/data/proposals.json", "r") as f:
+    with open("cplusplus/tests/data/proposals.json", "r") as f:
         expected_proposals = json.load(f)
         for expected_proposal in expected_proposals:
             proposal_id = expected_proposal["proposal_id"]
@@ -113,7 +115,7 @@ def test_content():
 
 
 def test_comments():
-    with open("cplusplus/data/comments.json", "r", encoding="utf-8") as f:
+    with open("cplusplus/tests/data/comments.json", "r", encoding="utf-8") as f:
         comments = json.load(f)
         for expected_comment in comments:
             url = expected_comment["url"]
@@ -153,10 +155,7 @@ def test_comments():
             ), (
                 f"Comment at {url} has author_email ending with '{comment.author_email[-1]}', expected '{expected_comment['author_email']['ends_with']}'"
             )
-            assert (
-                datetime.strptime(expected_comment["date"], "%Y-%m-%d %H:%M:%S")
-                == comment.date
-            ), (
+            assert datetime.fromisoformat(expected_comment["date"]) == comment.date, (
                 f"Comment at {url} has date {comment.date}, expected {expected_comment['date']}"
             )
             assert comment.content.startswith(

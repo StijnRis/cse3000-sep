@@ -13,6 +13,7 @@ class ProposalRevision(BaseModel):
     proposal_id: str
     title: str
     created_at: datetime.datetime
+    content_url: str | None
     content: str
     authors: set[str]
 
@@ -30,6 +31,7 @@ class Comment(BaseModel):
     url: str
     reply_to_message_id: int | None = None
     author_name: str
+    source_domain: str
     author_email: str
     date: datetime.datetime
     content: str

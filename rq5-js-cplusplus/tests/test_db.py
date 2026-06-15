@@ -1,25 +1,13 @@
+import glob
 import json
 import sqlite3
-from pathlib import Path
-
-CPLUSPLUS_DB_PATH = "cplusplus/output/cplusplus_proposals.sqlite3"
-JS_DB_PATH = "js/output/js_proposals.sqlite3"
 
 
-def test():
-    # show js proposal with name has regexp
-
-    conn = sqlite3.connect(JS_DB_PATH)
-    cur = conn.cursor()
-    cur.execute(
-        """
-        SELECT * FROM ProposalRevision
-        WHERE title LIKE '%regexp%';
-        """
-    )
-    rows = cur.fetchall()
-    print(rows)
-
+def get_most_recent_db_path(project: str) -> str:
+    files = glob.glob(f"{project}/output/{project}_proposals_*.sqlite3")
+    if not files:
+        raise FileNotFoundError(f"No database files found for project {project}")
+    return max(files)
 
 
 def test_js_amount_of_revisions():
@@ -31,10 +19,10 @@ def test_cplusplus_amount_of_revisions():
 
 
 def check_amount_of_revisions(project: str):
-    conn = sqlite3.connect(f"{project}/output/{project}_proposals.sqlite3")
+    conn = sqlite3.connect(get_most_recent_db_path(project))
     cur = conn.cursor()
 
-    with open(f"{project}/data/proposals.json", "r") as f:
+    with open(f"{project}/tests/data/proposals.json", "r") as f:
         expected_proposals = json.load(f)
 
     for expected_proposal in expected_proposals:
@@ -66,10 +54,10 @@ def test_cplusplus_titles():
 
 
 def check_titles(project: str):
-    conn = sqlite3.connect(f"{project}/output/{project}_proposals.sqlite3")
+    conn = sqlite3.connect(get_most_recent_db_path(project))
     cur = conn.cursor()
 
-    with open(f"{project}/data/proposals.json", "r") as f:
+    with open(f"{project}/tests/data/proposals.json", "r") as f:
         expected_proposals = json.load(f)
 
     for expected_proposal in expected_proposals:
@@ -104,10 +92,10 @@ def test_cplusplus_authors():
 
 
 def check_authors(project: str):
-    conn = sqlite3.connect(f"{project}/output/{project}_proposals.sqlite3")
+    conn = sqlite3.connect(get_most_recent_db_path(project))
     cur = conn.cursor()
 
-    with open(f"{project}/data/proposals.json", "r") as f:
+    with open(f"{project}/tests/data/proposals.json", "r") as f:
         expected_proposals = json.load(f)
 
     for expected_proposal in expected_proposals:
@@ -143,10 +131,10 @@ def test_cplusplus_revision_dates():
 
 
 def check_revision_dates(project: str):
-    conn = sqlite3.connect(f"{project}/output/{project}_proposals.sqlite3")
+    conn = sqlite3.connect(get_most_recent_db_path(project))
     cur = conn.cursor()
 
-    with open(f"{project}/data/proposals.json", "r") as f:
+    with open(f"{project}/tests/data/proposals.json", "r") as f:
         expected_proposals = json.load(f)
 
     for expected_proposal in expected_proposals:
@@ -181,10 +169,10 @@ def test_cplusplus_proposal_content():
 
 
 def check_proposal_content(project: str):
-    conn = sqlite3.connect(f"{project}/output/{project}_proposals.sqlite3")
+    conn = sqlite3.connect(get_most_recent_db_path(project))
     cur = conn.cursor()
 
-    with open(f"{project}/data/proposals.json", "r") as f:
+    with open(f"{project}/tests/data/proposals.json", "r") as f:
         expected_proposals = json.load(f)
 
     for expected_proposal in expected_proposals:
@@ -218,29 +206,29 @@ def test_js_proposal_stages():
     check_proposal_stages("js")
 
 
-def test_cplusplus_proposal_stages():
+def test_cplusplus_proposal_statusses():
     check_proposal_stages("cplusplus")
 
 
 def check_proposal_stages(project: str):
-    conn = sqlite3.connect(f"{project}/output/{project}_proposals.sqlite3")
+    conn = sqlite3.connect(get_most_recent_db_path(project))
     cur = conn.cursor()
 
-    with open(f"{project}/data/proposals.json", "r") as f:
+    with open(f"{project}/tests/data/proposals.json", "r") as f:
         expected_proposals = json.load(f)
 
     for expected_proposal in expected_proposals:
         proposal_id = expected_proposal["proposal_id"]
-        if "stages" not in expected_proposal:
+        if "statusses" not in expected_proposal:
             continue
         expected_stages = [
-            s["status"] + " " + s["date"] for s in expected_proposal["stages"]
+            s["raw_status"] + " " + s["date"] for s in expected_proposal["statusses"]
         ]
 
         stages_str = cur.execute(
             """
             SELECT raw_status, created_at
-            FROM StageHistory
+            FROM ProposalStatus
             WHERE proposal_id = ?
             ORDER BY created_at ASC;
             """,

@@ -2,11 +2,11 @@ from pathlib import Path
 
 from cplusplus.models import Comment, Proposal
 from db import (
+    ensure_person,
+    ensure_person_identifier,
     get_connection,
     init_db,
     insert_comment,
-    insert_if_not_exists_person_username,
-    insert_or_get_person,
     insert_project,
     insert_proposal,
     insert_proposal_revision,
@@ -46,13 +46,15 @@ def save_proposals_to_db(
         for proposal_id, proposal in proposals.items():
             insert_proposal(
                 conn,
-                project_id,
-                proposal.proposal_id,
+                project_id=project_id,
+                proposal_id=proposal.proposal_id,
                 topic=None,
                 proposal_type=None,
             )
+
             stage_index = 0
-            for stage in proposal.stages:
+            sorted_stages = sorted(proposal.stages, key=lambda s: s.created_at)
+            for stage in sorted_stages:
                 normalised_status = get_normalised_status(stage.stage)
                 insert_stage_history(
                     conn,
@@ -64,6 +66,7 @@ def save_proposals_to_db(
                     created_at=stage.created_at,
                 )
                 stage_index += 1
+
             sorted_revisions = sorted(proposal.revisions, key=lambda r: r.created_at)
             index_number = 0
             for revision in sorted_revisions:
@@ -76,9 +79,8 @@ def save_proposals_to_db(
                     created_at=revision.created_at,
                     content=revision.content,
                 )
-                index_number += 1
                 for author in set(revision.authors):
-                    person_id = insert_or_get_person(conn, author)
+                    person_id = ensure_person(conn, author)
                     insert_proposal_revision_author(
                         conn,
                         project_id=project_id,
@@ -86,6 +88,7 @@ def save_proposals_to_db(
                         revision_index=index_number,
                         person_id=person_id,
                     )
+                index_number += 1
 
     conn.close()
 
@@ -100,8 +103,13 @@ def save_comments_to_db(db_path: Path, comments: list[Comment], project_id: int)
     # Wrap in a single transaction block for performance
     with conn:
         for comment in comments_sorted:
-            person_id = insert_or_get_person(conn, comment.author_name)
-            insert_if_not_exists_person_username(conn, person_id, "email", comment.author_email)
+            person_id = ensure_person(
+                conn,
+                comment.author_name,
+            )
+            ensure_person_identifier(
+                conn, person_id, comment.source_domain, "email", comment.author_email
+            )
             comment_on_comment_id = (
                 comment_map[comment.reply_to_message_id]
                 if comment.reply_to_message_id
@@ -125,7 +133,7 @@ def get_normalised_status(raw_status: str) -> str:
     raw_status = raw_status.lower()
     if raw_status == "merged":
         return "accepted"
-    elif raw_status == "closed":
+    elif raw_status == "rejected":
         return "rejected"
     elif raw_status == "open":
         return "draft"

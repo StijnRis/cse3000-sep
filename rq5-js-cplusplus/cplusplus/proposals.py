@@ -2,24 +2,19 @@ import asyncio
 import logging
 import re
 from datetime import datetime
-from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import List
 
 import fitz
 import requests
 from bs4 import BeautifulSoup
-from pydantic import TypeAdapter
+from diskcache import Cache
+from requests.adapters import HTTPAdapter, Retry
 from requests.compat import urljoin
-
-from cplusplus.insert_db import save_proposals_to_db
-from cplusplus.models import Proposal, ProposalRevision
 from tqdm.asyncio import tqdm_asyncio
 
-
+from cplusplus.models import Proposal, ProposalRevision
 
 YEAR_URL_TEMPLATE = "https://www.open-std.org/jtc1/sc22/wg21/docs/papers/{year}/"
-
-revisions_to_fetch: List[Tuple[ProposalRevision, str]] = []
 
 
 def slugify(s: str) -> str:
@@ -40,8 +35,32 @@ def is_proposal(num_text: str) -> bool:
     return False
 
 
+def get_retry_session(
+    retries=3, backoff_factor=1, status_forcelist=(500, 502, 503, 504)
+) -> requests.Session:
+    """Creates a fresh requests session configured with automatic retries."""
+    session = requests.Session()
+    retry = Retry(
+        total=retries,
+        read=retries,
+        connect=retries,
+        backoff_factor=backoff_factor,
+        status_forcelist=status_forcelist,
+        raise_on_status=False,
+    )
+    adapter = HTTPAdapter(max_retries=retry)
+    session.mount("http://", adapter)
+    session.mount("https://", adapter)
+    return session
+
+
 def parse_content(url: str) -> str:
-    resp = requests.get(url, timeout=15)
+    session = get_retry_session()
+
+    assert url is not None, "Content URL is None, cannot fetch content"
+
+    resp = session.get(url, timeout=30)
+
     ctype = resp.headers.get("Content-Type", "")
     if "text/html" in ctype:
         s = BeautifulSoup(resp.content, "html5lib")
@@ -63,18 +82,66 @@ def parse_content(url: str) -> str:
         return resp.text
 
 
-async def fetch_all_contents():
-    logging.info(f"Fetching content for {len(revisions_to_fetch)} revisions with concurrency")
-    semaphore = asyncio.Semaphore(30)
+cache = Cache("cplusplus/output/proposal_content_cache")
 
-    async def fetch_revision_content(revision, href):
-        async with semaphore:
-            content = await asyncio.to_thread(parse_content, href)
-            revision.content = content
 
-    await tqdm_asyncio.gather(
-        *(fetch_revision_content(rev, href) for rev, href in revisions_to_fetch)
+async def fetch_all_contents(proposals: List[Proposal]):
+    revisions = [rev for proposal in proposals for rev in proposal.revisions]
+    total_revisions = len(revisions)
+    logging.info(f"Processing content for {total_revisions} total revisions...")
+
+    # 1. Split the workload upfront using a fast in-memory pass
+    already_cached = []
+    to_download = []
+
+    for revision in revisions:
+        if not revision.content_url:
+            logging.warning(f"Revision {revision.proposal_id} has no URL, skipping")
+            continue
+
+        if revision.content_url in cache:
+            already_cached.append(revision)
+        else:
+            to_download.append(revision)
+
+    # 2. Instantly populate the ones we already have
+    logging.info(
+        f"Cache summary -> Hits: {len(already_cached)} | Misses: {len(to_download)} "
+        f"({(len(already_cached) / total_revisions) * 100:.1f}% cached)"
     )
+
+    for revision in already_cached:
+        revision.content = cache[revision.content_url]
+
+    if not to_download:
+        logging.info(
+            "All records successfully loaded from cache. No network requests needed."
+        )
+        return
+
+    # 3. Process only the remaining items
+    logging.info(
+        f"Starting concurrent downloads for the remaining {len(to_download)} items..."
+    )
+
+    semaphore = asyncio.Semaphore(10)
+
+    async def fetch_revision_content(revision: ProposalRevision):
+        async with semaphore:
+            assert revision.content_url is not None, (
+                "Revision content URL is None, cannot fetch content"
+            )
+            content = await asyncio.to_thread(parse_content, revision.content_url)
+
+            if content is not None:
+                revision.content = content
+                # Persist to disk
+                await asyncio.to_thread(cache.set, revision.content_url, content)
+
+    # The progress bar dynamically scales to track only the outstanding downloads
+    await tqdm_asyncio.gather(*(fetch_revision_content(rev) for rev in to_download))
+
+    logging.info("Content fetching complete.")
 
 
 def parse_date(date_str: str, year: int) -> datetime:
@@ -109,7 +176,6 @@ def parse_table_rows(
     year: int,
     include_PL_number: bool = False,
 ):
-
     tables = soup.find_all("table")
     if len(tables) == 0:
         raise ValueError("No tables found on the page")
@@ -177,6 +243,17 @@ def parse_table_rows(
                     revisions=[],
                 )
 
+            # find the link to the proposal content
+            content_url = None
+            link_tag = proposal_id_cell.find("a")
+            if link_tag:
+                href = urljoin(base_url, link_tag["href"])
+                content_url = href
+            else:
+                logging.info(
+                    f"No link found for proposal {proposal_id} in row, skipping content"
+                )
+
             # Create revision object
             revision = ProposalRevision(
                 proposal_id=proposal_id,
@@ -184,17 +261,8 @@ def parse_table_rows(
                 created_at=doc_date,
                 content="",
                 authors=set(authors),
+                content_url=content_url,
             )
-
-            # find the link to the proposal content
-            link_tag = proposal_id_cell.find("a")
-            if link_tag:
-                href = urljoin(base_url, link_tag["href"])
-                revisions_to_fetch.append((revision, href))
-            else:
-                logging.info(
-                    f"No link found for proposal {proposal_id} in row, skipping content"
-                )
 
             proposals[proposal_id].revisions.append(revision)
 
@@ -256,7 +324,7 @@ def parse_table_old_rows(proposals: dict[str, Proposal], soup, base_url, year: i
             link_tag = proposal_id_cell.find("a")
             if not link_tag:
                 raise ValueError("Proposal number cell missing link")
-            href = urljoin(base_url, link_tag["href"])
+            content_url = urljoin(base_url, link_tag["href"])
 
             title = title_cell.get_text(strip=True)
             authors = [a.strip() for a in (author_cell.get_text(strip=True).split(","))]
@@ -283,9 +351,8 @@ def parse_table_old_rows(proposals: dict[str, Proposal], soup, base_url, year: i
                 created_at=doc_date,
                 content="",
                 authors=set(authors),
+                content_url=content_url,
             )
-
-            revisions_to_fetch.append((revision, href))
 
             proposals[proposal_id].revisions.append(revision)
 
@@ -344,18 +411,9 @@ def parse_list(proposals: dict[str, Proposal], soup, base_url, year: int):
             if link_tag:
                 break
 
-        revision = ProposalRevision(
-            proposal_id=proposal_id,
-            title=title,
-            created_at=datetime(year, 1, 1),
-            content="",
-            authors=set(authors),
-        )
-        proposals[proposal_id].revisions.append(revision)
-
+        content_url = None
         if link_tag:
-            href = urljoin(base_url, link_tag["href"])
-            revisions_to_fetch.append((revision, href))
+            content_url = urljoin(base_url, link_tag["href"])
         else:
             if li.find("a"):
                 raise ValueError(
@@ -364,6 +422,16 @@ def parse_list(proposals: dict[str, Proposal], soup, base_url, year: int):
             logging.warning(
                 f"No content link found for proposal {proposal_id} in list item, skipping content"
             )
+
+        revision = ProposalRevision(
+            proposal_id=proposal_id,
+            title=title,
+            created_at=datetime(year, 1, 1),
+            content="",
+            authors=set(authors),
+            content_url=content_url,
+        )
+        proposals[proposal_id].revisions.append(revision)
 
     return proposals
 
@@ -404,6 +472,10 @@ def parse_text_blob_by_line(proposals: dict[str, Proposal], soup, base_url):
             content_url = None
             if link and link.get("href"):
                 content_url = urljoin(base_url, link["href"])
+            else:
+                logging.warning(
+                    f"No content link found for proposal {proposal_id} in text blob, skipping content"
+                )
 
             title = ""
             authors = ""
@@ -430,15 +502,9 @@ def parse_text_blob_by_line(proposals: dict[str, Proposal], soup, base_url):
                 created_at=datetime(year, 1, 1),
                 content="",
                 authors=set(authors_list),
+                content_url=content_url,
             )
             proposals[proposal_id].revisions.append(revision)
-
-            if content_url:
-                revisions_to_fetch.append((revision, content_url))
-            else:
-                logging.warning(
-                    f"No content link found for proposal {proposal_id} in text blob, skipping content"
-                )
 
     return proposals
 
@@ -488,6 +554,15 @@ def parse_text_blob_multiple_lines(proposals: dict[str, Proposal], soup, base_ur
                     revisions=[],
                 )
 
+            content_url = None
+            link = wg21_number_item.find("a")
+            if link:
+                content_url = urljoin(base_url, link["href"])
+            else:
+                logging.warning(
+                    f"No content link found for proposal {proposal_id} in text blob, skipping content"
+                )
+
             revision = ProposalRevision(
                 proposal_id=proposal_id,
                 title=title,
@@ -496,17 +571,9 @@ def parse_text_blob_multiple_lines(proposals: dict[str, Proposal], soup, base_ur
                 authors=set(
                     [a.strip() for a in author.replace(" and ", ",").split(",")]
                 ),
+                content_url=content_url,
             )
             proposals[proposal_id].revisions.append(revision)
-
-            link = wg21_number_item.find("a")
-            if link:
-                href = urljoin(base_url, link["href"])
-                revisions_to_fetch.append((revision, href))
-            else:
-                logging.warning(
-                    f"No content link found for proposal {proposal_id} in text blob, skipping content"
-                )
 
     return proposals
 
@@ -537,6 +604,3 @@ def scrape_year(proposals: dict[str, Proposal], year: int):
     elif year >= 1992:
         return parse_list(proposals, soup, url, year)
     raise ValueError(f"Unsupported year format: {year}")
-
-
-
