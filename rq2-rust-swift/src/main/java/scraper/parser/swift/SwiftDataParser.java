@@ -50,7 +50,8 @@ public class SwiftDataParser {
         String implemented = getImplementedAt(content);
         String title = content.split("\n")[0].substring(2);
 
-        if(!getIdFromContent(new Scanner(content)).equals(proposal.getId().getProposalId())) throw new Exception();
+        String id = getIdFromContent(new Scanner(content));
+        if(!id.equals(proposal.getId().getProposalId()) && !id.equals("SE-NNNN")) throw new Exception();
 
         ProposalRevisionId prId = new ProposalRevisionId(
                 project.getId(),
@@ -66,6 +67,7 @@ public class SwiftDataParser {
             String line = scanner.nextLine();
 
             Matcher m = Pattern.compile("\\w{2}-\\d{4}").matcher(line); //XX-0000 format
+            Matcher m2 = Pattern.compile("\\w{2}-\\w{4}").matcher(line);
             if (m.find()) {
                 String result = m.group();
                 if (!result.equals("SE-0000")) {
@@ -73,10 +75,17 @@ public class SwiftDataParser {
                     return result;
                 }
             }
+            if(m2.find()) {
+                String result = m2.group();
+                if (result.startsWith("SE")) {
+                    scanner.close();
+                    return m2.group(); //Unassigned id.
+                }
+            }
         }
 
         scanner.close();
-        return null;
+        return "";
     }
 
     public static String getPitchFromContent(Scanner scanner) {

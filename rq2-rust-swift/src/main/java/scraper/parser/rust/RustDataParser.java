@@ -60,10 +60,17 @@ public class RustDataParser {
         String[] pathSplit = gitReader.getLastPath().split("/");
         fileName = pathSplit[pathSplit.length - 1];
 
+        int totalFinished = 0;
         for (int i = 0; i < commits.size(); i++) {
             RevCommit commit = commits.get(i);
 
-            String fileContent = gitReader.getFileContents(commit.getTree(), commit);
+
+            String fileContent = "";
+            try {
+                fileContent = gitReader.getFileContents(commit.getTree(), commit);
+            } catch (Exception e) {
+                continue;
+            }
 
             Instant time = commit.getAuthorIdent().getWhenAsInstant();
             Date createdAt = Date.valueOf(LocalDate.ofInstant(time, ZoneId.systemDefault()));
@@ -84,9 +91,11 @@ public class RustDataParser {
             );
 
             revisions.add(pr);
-
             extractAuthor(prId, pr, commit.getAuthorIdent());
+            totalFinished++;
         }
+
+        if (totalFinished == 0) throw new Exception("No revisions found - Reverting to online");
 
         return revisions;
     }
