@@ -156,7 +156,8 @@ const collectJEPEmails = async (id: number, listName: string, cacheDir: string):
     allEmails = await fetchEmails(jepMailListURL(listName, listName), cacheDir);
   }
   return allEmails.filter(({ subject }) => subject?.toLowerCase().match(/^jep[^a-z]|[^a-z]jep[^a-z]|[^a-z]jep$/)
-    && subject.match(`^${id}[^0-9]|[^0-9]${id}[^0-9]|[^0-9]${id}$`));
+    && subject.toLowerCase().match(`^${id}[^a-z0-9]|[^a-z0-9./]${id}[^a-z0-9]|[^a-z0-9./]${id}$`)
+    && !subject.toLowerCase().match(`jdk ${id}`));
 };
 
 /**
