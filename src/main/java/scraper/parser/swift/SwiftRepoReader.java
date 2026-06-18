@@ -119,6 +119,7 @@ public class SwiftRepoReader extends RepoReader {
                 ).findFirst().get().getFilename();
         GitHubService.RawFile file = getFileFromAPI(OWNER, REPO, commit.getSha(), filepath);
         String content = new String(DECODER.decode(file.getContent().replace("\n", "")));
+        String title = content.split("\n")[0].substring(2);
         String implementedAt = SwiftDataParser.getImplementedAt(content);
 
         ProposalRevisionId prId = new ProposalRevisionId(
@@ -127,7 +128,7 @@ public class SwiftRepoReader extends RepoReader {
                 sequence
         );
 
-        return new ProposalRevision(prId, proposal, pr.getTitle(), pr.getCreated_at(), content, implementedAt);
+        return new ProposalRevision(prId, proposal, title, pr.getCreated_at(), content, implementedAt);
     }
 
     private Proposal createUnlistedProposal(GitHubService.PullRequest pr, String content, String fileIdentifier) throws IOException {

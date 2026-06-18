@@ -108,7 +108,7 @@ public class RustRepoReader extends RepoReader {
                 ProposalRevision pr = new ProposalRevision(
                         prId,
                         proposal,
-                        commit.getCommit().getMessage(),
+                        proposal.getPullRequests().getFirst().getTitle(),
                         createdAt,
                         content,
                         ""
