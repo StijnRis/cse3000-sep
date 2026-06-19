@@ -15,7 +15,7 @@ const jepIDs = await collectIDsJEP(cacheDir);
 const superseders = await getSupersederJEPs(cacheDir);
 const jeps: JEP[] = [];
 for(const id of jepIDs) {
-  // may need to scrape one at a time because openjdk.org crashes or forces a cooldown from too many parallel requests
+  // may need to scrape one at a time because openjdk.org has rate limits
   const jep = await scrapeJEP(id, superseders[id], cacheDir, saveDir);
   jeps.push(jep);
   console.log(`Successfully scraped JEP ${jep.id}`);

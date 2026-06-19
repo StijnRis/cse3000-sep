@@ -259,10 +259,20 @@ export abstract class Persister<SEP_T> {
   /**
    * Implementations should come up with their own translation schemes
    * @param status raw status
+   * @returns normalized status
    */
   abstract normalizeStatus(status: string | undefined): ProposalStatusSQL['normalised_status'];
 
+  /**
+   * Implement to persist all people from given SEPs
+   * @param seps 
+   */
   abstract persistPeople(seps: SEP_T[]): void;
+  /**
+   * Implement to persist SEPs
+   * Intended to be done after the people are persisted
+   * @param seps 
+   */
   abstract persistSEPs(seps: SEP_T[]): void;
 
   /**

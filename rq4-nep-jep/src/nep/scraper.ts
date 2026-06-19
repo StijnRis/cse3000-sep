@@ -262,10 +262,11 @@ const parseNEP = async (strID: string, html: HTMLElement, cacheDir: string): Pro
 };
 
 /**
- * Scrapes NEP from URL
+ * Scrapes NEP from ID
  * @param strID text ID of NEP (format: nep-<number ID>-<short title>)
  * @param cacheDir cache folder for fetch results, empty for no caching
  * @param saveDir directory to save result; leave undefined for no saving
+ * @returns NEP object
  */
 export const scrapeNEP = async (strID: string, cacheDir: string, saveDir?: string): Promise<NEP> => {
   const nep = await parseNEP(strID, await fetchHTMLParsed(`${nepBaseURL}${strID}.html`, cacheDir), cacheDir);
