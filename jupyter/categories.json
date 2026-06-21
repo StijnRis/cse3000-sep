@@ -1,0 +1,35 @@
+[
+    {
+        "domain": "Core Language & Syntax",
+        "categories": [
+            "Syntax & Language Grammar",
+            "Type System & Static Analysis",
+            "Memory Management & Concurrency",
+            "Compiler & Tooling Internals"
+        ]
+    },
+    {
+        "domain": "Standard Library & API Design",
+        "categories": [
+            "API Expansion",
+            "API Refactoring & Behavior Changes",
+            "Deprecation & Removal"
+        ]
+    },
+    {
+        "domain": "Architecture & Infrastructure",
+        "categories": [
+            "Ecosystem Architecture & Protocols",
+            "Security & Hardening",
+            "Performance & Memory Optimization"
+        ]
+    },
+    {
+        "domain": "Documentation & Community Process",
+        "categories": [
+            "Process, Governance & Policy",
+            "Documentation & Education",
+            "Ecosystem Interoperability & Standards"
+        ]
+    }
+]
