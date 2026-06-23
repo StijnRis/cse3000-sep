@@ -1,3 +1,7 @@
+# SEP Scraper
+
+This is part of a [Research Project for TU Delft](https://github.com/TU-Delft-CSE/Research-Project), from the academic year 2025-2026.
+
 # Environment Variables
 
 Set these on your machine or in a `.env` file
@@ -6,25 +10,14 @@ Set these on your machine or in a `.env` file
 # For scraping:
 GITHUB_TOKEN # auth token for github API
 GITHUB_API_VERSION # version of github API (see github docs for format)
-
-# For merging databases:
-INPUT_DB_FILES # SQL database files from which to read SEP data to be combined into one; file names must be separated by a comma and nothing else; final path will be <root>/data/{file name} for each input file
-
-# For merging databases and analysis:
-COMMON_DB_FILE # SQL database file with combined SEP data; final path will be <root>/data/{file name}
-
-# For analysis
-OPENAI_API_KEY # API key for OpenAI
-HF_TOKEN # access token for Hugging Face
 ```
 
 # Setup
 
-Clone the repo, install npm and uv, then:
+Clone the repo, install npm (see exact version in `package.json`), then:
 ```bash
 cd <here>
 npm i
-uv sync
 ```
 
 # Running scrapers
@@ -68,15 +61,3 @@ The file `nep-missing-dates.json` contains the oldest date from the GitHub histo
 The GitHub API can be accessed without a token, but the rate limit will be lower.
 
 Leaving out the `new-db` flag will cause the new data to be appended, and may cause primary key conflicts and such. One situation where you may want to leave it out is if you want to dump both JEP and NEP into the same database. IDs are different between projects, so that shouldn't cause issues.
-
-# Running data merger
-
-After getting data files and specifying them accordingly in [environment variables](#environment-variables):
-
-```bash
-python db_merger.py
-```
-
-# Running analysis
-
-The notebook `analysis.ipynb` contains all the analysis scripts. Set your [environment variables](#environment-variables) accordingly. After syncing uv, set the Python environment to the `.venv` folder. Then you can run cells. There may be dependencies from later cells to earlier cells.
