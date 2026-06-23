@@ -10,9 +10,16 @@ export type EmailUser = {
   email: string,
   name: string,
 };
-export type GithubUser = {
+export type GithubUserJSON = {
   login: string,
   name: string,
+};
+export type GithubOrganisation = {
+  login: string,
+  name?: string,
+};
+export type GithubUser = GithubUserJSON & {
+  affiliations: GithubOrganisation[],
 };
 
 export type Comment<ID, A> = {
@@ -22,7 +29,9 @@ export type Comment<ID, A> = {
   created: Date,
   body: string,
 };
-export type Email = Comment<string, EmailUser>;
+export type Email = Comment<string, EmailUser> & {
+  subject?: string,
+};
 export type GithubComment = Comment<number, GithubUser>;
 
 export type GithubCommentJSON = {

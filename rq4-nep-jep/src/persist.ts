@@ -42,7 +42,7 @@ class PersonIdentifierSQL {
 };
 
 @Entity('Organisation')
-class OrganisationSQL {
+export class OrganisationSQL {
   @PrimaryColumn({type: 'integer'})
   organisation_id: number;
   @Column({type: 'text'})
@@ -80,7 +80,7 @@ class ProposalRevisionSQL {
   title: string;
   @Column({type: 'datetime'})
   created_at: string; //date
-  @Column({type: 'text'})
+  @Column({type: 'text', nullable: true})
   content: string;
   @Column({type: 'text', nullable: true})
   implemented_at_version?: string;
@@ -111,8 +111,8 @@ class ProposalStatusSQL {
   status_index: number;
   @Column({type: 'text'})
   normalised_status: 'accepted' | 'rejected' | 'draft' | 'review' | 'withdrawn' | 'superseded' | 'unknown';
-  @Column({type: 'text', nullable: true})
-  raw_status?: string;
+  @Column({type: 'text'})
+  raw_status: string;
   @Column({type: 'datetime'})
   created_at: string; //date
 };
@@ -137,7 +137,7 @@ export class RelatedProposalSQL {
     {name: 'related_proposal_id', referencedColumnName: 'proposal_id'},
   ])
   related_proposal: ProposalSQL;
-  @Column({type: 'text'})
+  @Column({type: 'text', nullable: true})
   type: 'related' | 'supersedes';
 
   constructor(obj?: Pick<RelatedProposalSQL, 'proposal' | 'related_proposal' | 'type'>) {
@@ -171,7 +171,7 @@ class CommentSQL {
   proposal: ProposalSQL; //fk'
   @Column({type: 'integer', nullable: true}) //@ForeignKey(() => CommentSQL, {deferrable: 'INITIALLY DEFERRED'}) @JoinColumn({name: 'comment_on_comment_id'})
   comment_on_comment_id?: number; //fk''
-  @Column({type: 'datetime'})
+  @Column({type: 'datetime', nullable: true})
   created_at: string; //date
   @Column({type: 'text'})
   content: string;
@@ -186,7 +186,7 @@ class Database {
   proposal = new Map<string/*project_id proposal_id*/, ProposalSQL>();
   proposal_revision = new Map<string/*project_id proposal_id revision_index*/, ProposalRevisionSQL>();
   proposal_status = new Map<string/*project_id proposal_id stage_index*/, ProposalStatusSQL>();
-  related_proposal: RelatedProposalSQL[] = [];
+  related_proposal = new Map<string/*project_id proposal_id related_project_id related_proposal_id*/, RelatedProposalSQL>();
   comment = new Map<number/*comment_id*/, CommentSQL>();
 }
 
@@ -259,10 +259,20 @@ export abstract class Persister<SEP_T> {
   /**
    * Implementations should come up with their own translation schemes
    * @param status raw status
+   * @returns normalized status
    */
   abstract normalizeStatus(status: string | undefined): ProposalStatusSQL['normalised_status'];
 
+  /**
+   * Implement to persist all people from given SEPs
+   * @param seps 
+   */
   abstract persistPeople(seps: SEP_T[]): void;
+  /**
+   * Implement to persist SEPs
+   * Intended to be done after the people are persisted
+   * @param seps 
+   */
   abstract persistSEPs(seps: SEP_T[]): void;
 
   /**
@@ -288,7 +298,7 @@ export abstract class Persister<SEP_T> {
  */
 export const dataSource = async (database: string, dropSchema: boolean): Promise<DataSource> =>
   await new DataSource({
-    type: 'sqlite',
+    type: 'better-sqlite3',
     database,
     entities: [ProjectSQL, OrganisationSQL, PersonSQL, PersonIdentifierSQL, ProposalSQL, ProposalRevisionSQL, ProposalStatusSQL, RelatedProposalSQL, CommentSQL],
     synchronize: true,
@@ -305,10 +315,10 @@ export const dumpDatabase = async (dataSource: DataSource, db: Database) => {
   await dataSource.getRepository(ProjectSQL).save(db.project.values().toArray());
   await dataSource.getRepository(OrganisationSQL).save(db.organisation.values().toArray());
   await dataSource.getRepository(PersonSQL).save(db.person.values().toArray());
-  await dataSource.getRepository(PersonIdentifierSQL).save(db.person_identifier.values().toArray());
+  await dataSource.getRepository(PersonIdentifierSQL).save(db.person_identifier.values().toArray(), { chunk: 500 });
   await dataSource.getRepository(ProposalSQL).save(db.proposal.values().toArray());
-  await dataSource.getRepository(ProposalRevisionSQL).save(db.proposal_revision.values().toArray());
-  await dataSource.getRepository(ProposalStatusSQL).save(db.proposal_status.values().toArray());
-  await dataSource.getRepository(RelatedProposalSQL).save(db.related_proposal);
-  await dataSource.getRepository(CommentSQL).save(db.comment.values().toArray());
+  await dataSource.getRepository(ProposalRevisionSQL).save(db.proposal_revision.values().toArray(), { chunk: 500 });
+  await dataSource.getRepository(ProposalStatusSQL).save(db.proposal_status.values().toArray(), { chunk: 500 });
+  await dataSource.getRepository(RelatedProposalSQL).save(db.related_proposal.values().toArray());
+  await dataSource.getRepository(CommentSQL).save(db.comment.values().toArray(), { chunk: 500 });
 };

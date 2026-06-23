@@ -156,9 +156,14 @@ vite.config.ts.timestamp-*
 # Built Visual Studio Code Extensions
 *.vsix
 
+.idea/
+.ipynb_checkpoints/
+.vscode/
+
 cache*/
 data/
 test.ts
 test.py
 *.db
 build/
+__pycache__/

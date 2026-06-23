@@ -1,20 +1,28 @@
+# SEP Scraper
+
+This is part of a [Research Project for TU Delft](https://github.com/TU-Delft-CSE/Research-Project), from the academic year 2025-2026.
+
 # Environment Variables
 
+Set these on your machine or in a `.env` file
+
 ```bash
+# For scraping:
 GITHUB_TOKEN # auth token for github API
 GITHUB_API_VERSION # version of github API (see github docs for format)
 ```
 
 # Setup
 
-Clone the repo, install npm and uv, then:
+Clone the repo, install npm (see exact version in `package.json`), then:
 ```bash
 cd <here>
 npm i
-uv sync
 ```
 
 # Running scrapers
+
+After setting [environment variables](#environment-variables):
 
 ```bash
 #Scraping JEP:
@@ -53,7 +61,3 @@ The file `nep-missing-dates.json` contains the oldest date from the GitHub histo
 The GitHub API can be accessed without a token, but the rate limit will be lower.
 
 Leaving out the `new-db` flag will cause the new data to be appended, and may cause primary key conflicts and such. One situation where you may want to leave it out is if you want to dump both JEP and NEP into the same database. IDs are different between projects, so that shouldn't cause issues.
-
-# Running analysis
-
-The notebook `analysis.ipynb` contains all the analysis scripts. After syncing uv, set the environment to the `.venv` folder. Then you can run cells. There may be dependencies from later cells to earlier cells.

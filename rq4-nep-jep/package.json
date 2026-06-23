@@ -13,16 +13,25 @@
   "license": "ISC",
   "type": "module",
   "dependencies": {
-    "fast-xml-parser": "^5.7.3",
-    "fs-extra": "^11.3.5",
-    "node-html-parser": "^7.1.0",
-    "mbox-parser": "^1.0.1",
-    "reflect-metadata": "^0.2.2",
-    "sqlite3": "^5.0.3",
-    "typeorm": "^0.3.28"
+    "better-sqlite3": "12.10.0",
+    "email-reply-parser": "2.3.5",
+    "fast-xml-parser": "5.8.0",
+    "fs-extra": "11.3.5",
+    "mbox-parser": "1.0.1",
+    "node": "26.1.0",
+    "node-html-parser": "7.1.0",
+    "npm": "11.16.0",
+    "reflect-metadata": "0.2.2",
+    "sqlite3": "6.0.1",
+    "typeorm": "1.0.0"
   },
   "devDependencies": {
-    "@types/fs-extra": "^11.0.4",
-    "@types/node": "^25.6.1"
+    "@types/fs-extra": "11.0.4",
+    "@types/node": "25.9.1"
+  },
+  "allowScripts": {
+    "sqlite3@6.0.1": true,
+    "better-sqlite3@12.10.0": true,
+    "node@26.1.0": true
   }
 }
