@@ -6,13 +6,13 @@ import mailbox
 import dateutil
 from sqlmodel import SQLModel
 
-from pepscraper.constants import PYTHON_MAILING_LISTS
+from pepscraper.constants import END_DATE, PYTHON_MAILING_LISTS
 from pepscraper.models import (
     Comment,
     Project,
     Proposal,
     ProposalRevision,
-    StageHistory,
+    ProposalStatus,
 )
 from pepscraper.project_scraper import PersonIdentify, ProjectScraper
 from pepscraper.projects.pep.discourse import (
@@ -56,7 +56,7 @@ class PEPProjectScraper(ProjectScraper):
             topic=pep["topic"],
             proposal_type=pep["type"],
             revisions=[],
-            stage_history=[],
+            statuses=[],
         )
 
         # Fetch revisions
@@ -73,6 +73,10 @@ class PEPProjectScraper(ProjectScraper):
         old_content: str | None = None
         revision_index = -1
         for commit, content in history:
+            created_at = dateutil.parser.parse(commit["committedDate"])
+            if created_at > END_DATE:
+                break
+
             # If content remains unchanged across revisions, the PDEP was unchanged
             # by this commit and we can skip it.
             if old_content == content:
@@ -96,7 +100,6 @@ class PEPProjectScraper(ProjectScraper):
 
             revision_index += 1
             old_content = content
-            created_at = dateutil.parser.parse(commit["committedDate"])
 
             # Create revision
             proposal_revision = ProposalRevision(
@@ -117,19 +120,23 @@ class PEPProjectScraper(ProjectScraper):
 
             # Update stage history
             if (
-                len(proposal.stage_history) == 0
-                or proposal.stage_history[-1].raw_status != features[1]
+                len(proposal.statuses) == 0
+                or proposal.statuses[-1].raw_status != features[1]
             ):
-                proposal.stage_history.append(
-                    StageHistory(
+                proposal.statuses.append(
+                    ProposalStatus(
                         project_id=project.project_id,
                         proposal_id=str(pep["number"]),
-                        stage_index=len(proposal.stage_history),
-                        normalised_status=StageHistory.normalise_status(features[1]),
+                        status_index=len(proposal.statuses),
+                        normalised_status=ProposalStatus.normalise_status(features[1]),
                         raw_status=features[1],
                         created_at=created_at,
                     )
                 )
+
+        # If proposal was created after END_DATE, no revisions are extracted
+        if len(proposal.revisions) == 0:
+            return []
 
         proposal.proposer = proposal_revision.authors[-1]
 
@@ -227,6 +234,10 @@ class PEPProjectScraper(ProjectScraper):
 
             previous_comment: Comment | None = None
             for post in sorted(posts, key=lambda post: int(post["post_number"])):
+                created_at = dateutil.parser.isoparse(post["created_at"])
+                if created_at > END_DATE:
+                    continue
+
                 author = self.get_person(
                     PersonIdentify(
                         domain="discuss.python.org",
@@ -241,7 +252,7 @@ class PEPProjectScraper(ProjectScraper):
                     project_id=self.project.project_id,
                     proposal_id=str(pep_number),
                     comment_on_comment_id=None,
-                    created_at=dateutil.parser.isoparse(str(post["created_at"])),
+                    created_at=created_at,
                     content=content,
                 )
                 comment.author = author

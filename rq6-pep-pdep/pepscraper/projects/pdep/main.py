@@ -1,11 +1,13 @@
 import logging
 from collections.abc import Sequence
+from datetime import datetime
 from typing import Any, cast
 
 from aiohttp import ClientResponseError
 from dateutil import parser
 from sqlmodel import SQLModel
 
+from pepscraper.constants import END_DATE
 from pepscraper.http import request_page
 from pepscraper.models import (
     Comment,
@@ -13,7 +15,7 @@ from pepscraper.models import (
     Project,
     Proposal,
     ProposalRevision,
-    StageHistory,
+    ProposalStatus,
 )
 from pepscraper.project_scraper import PersonIdentify, ProjectScraper
 from pepscraper.projects.pdep.github import (
@@ -44,6 +46,10 @@ class PDEPProjectScraper(ProjectScraper):
         commit: dict[str, Any],
         proposal_filename: str,
     ) -> tuple[str, ProposalRevision, str] | None:
+        created_at = parser.parse(str(commit["commit"]["author"]["date"]))
+        if created_at > END_DATE:
+            return None
+
         pull_request_number = int(pull_request_details["number"])
         try:
             proposal_id = get_proposal_id_from_title(str(pull_request_details["title"]))
@@ -110,7 +116,7 @@ class PDEPProjectScraper(ProjectScraper):
             revision_index=0,
             title=features.title,
             # status=features.status.lower(),
-            created_at=parser.parse(str(commit["commit"]["author"]["date"])),
+            created_at=created_at,
             content=features.content,
             implemented_at_version=None,
             authors=authors,
@@ -121,8 +127,8 @@ class PDEPProjectScraper(ProjectScraper):
         return proposal_id, proposal_revision, status
 
     async def get_proposals(self) -> Sequence[SQLModel]:
-        proposals: dict[str, Proposal] = {}
-        proposal_revisions: dict[str, list[tuple[ProposalRevision, str]]] = {}
+        proposals: dict[str, list[tuple[set[str], Proposal]]] = {}
+        proposal_statuses: dict[str, list[tuple[datetime, str]]] = {}
 
         for pull_request in await get_pdep_pull_requests():
             pull_request_number = int(pull_request["number"])
@@ -150,6 +156,9 @@ class PDEPProjectScraper(ProjectScraper):
                 continue
 
             current_filename = proposal_filename
+            proposal_filenames: set[str] = {proposal_filename}
+            proposal_revisions: list[ProposalRevision] = []
+            statuses: list[tuple[datetime, str]] = []
             for commit in reversed(commits):
                 # Fetch commit contents, extract proposal metadata, and create revision
                 revision_data = await self._get_proposal_revision(
@@ -174,15 +183,14 @@ class PDEPProjectScraper(ProjectScraper):
                         and file.get("previous_filename")
                     ):
                         current_filename = str(file["previous_filename"])
+                        proposal_filenames.add(current_filename)
                         break
 
                 # If content remains unchanged across revisions, the PDEP was unchanged
                 # by this commit and we can skip it.
                 if (
-                    proposal_id in proposal_revisions
-                    and proposal_revisions[proposal_id]
-                    and proposal_revisions[proposal_id][-1][0].content
-                    == proposal_revision.content
+                    proposal_revisions
+                    and proposal_revisions[-1].content == proposal_revision.content
                 ):
                     logging.info(
                         "PDEP %s: Commit %s did not change proposal content, skipping",
@@ -194,60 +202,89 @@ class PDEPProjectScraper(ProjectScraper):
                     proposal_revision.authors = []
                     continue
 
-                # Get the proposal
-                proposal = proposals.get(proposal_id)
-                if proposal is None:
-                    proposal = Proposal(
-                        project_id=self.project.project_id,
-                        proposal_id=proposal_id,
-                        proposer_id=-1,
-                        topic=None,
-                        proposal_type=None,
-                    )
-                    proposals[proposal_id] = proposal
+                proposal_revisions.append(proposal_revision)
+                statuses.append((proposal_revision.created_at, status))
 
-                    # Proposer is the PR author
-                    proposer_name = str(pull_request_details["user"]["login"])
-                    proposer = self.get_person(
-                        PersonIdentify(domain="github.com", username=proposer_name)
-                    )
-                    proposal.proposer = proposer
+            # If a proposal was created after END_DATE, no revisions will be extracted
+            if not proposal_revisions:
+                continue
 
-                # Append/assign revision
-                proposal.revisions.append(proposal_revision)
-                proposal_revisions.setdefault(proposal_id, []).append(
-                    (proposal_revision, status)
+            # Find an existing proposal.
+            # PDEPs can take on the ID of previously rejected PDEPs, so we need to
+            # check for matching filenames as well.
+            proposal_id = proposal_revisions[-1].proposal_id
+            existing_proposals = proposals.get(proposal_id, [])
+            for existing_proposal_filenames, proposal in existing_proposals:  # noqa: B007
+                if proposal_filenames.intersection(existing_proposal_filenames):
+                    existing_proposal_filenames.update(proposal_filenames)
+                    break
+            else:
+                # No existing proposal was found. Create a new proposal instead.
+                proposal = Proposal(
+                    project_id=self.project.project_id,
+                    proposal_id=f"{proposal_id}-{len(existing_proposals) + 1}",
+                    proposer_id=-1,
+                    topic=None,
+                    proposal_type=None,
+                )
+                proposals.setdefault(proposal_id, []).append(
+                    (proposal_filenames, proposal)
                 )
 
+                # Proposer is the PR author
+                proposer_name = str(pull_request_details["user"]["login"])
+                proposer = self.get_person(
+                    PersonIdentify(domain="github.com", username=proposer_name)
+                )
+                proposal.proposer = proposer
+
+            # Append/assign revisions
+            proposal.revisions.extend(proposal_revisions)
+            proposal_statuses.setdefault(proposal.proposal_id, []).extend(statuses)
+
         # Sort revisions by creation date and assign revision indices
-        for revisions in proposal_revisions.values():
-            revisions.sort(key=lambda revision: revision[0].created_at)
-            for revision_index, (revision, status) in enumerate(revisions):
-                revision.revision_index = revision_index
+        for proposal_list in proposals.values():
+            for _, proposal in proposal_list:
+                proposal.revisions.sort(key=lambda revision: revision.created_at)
 
-                # Update stage history if status has changed between revisions
-                proposal = proposals[revision.proposal_id]
-                if (
-                    len(proposal.stage_history) == 0
-                    or proposal.stage_history[-1].raw_status != status
-                ):
-                    proposal.stage_history.append(
-                        StageHistory(
-                            project_id=self.project.project_id,
-                            proposal_id=proposal_id,
-                            stage_index=len(proposal.stage_history),
-                            normalised_status=StageHistory.normalise_status(status),
-                            raw_status=status,
-                            created_at=proposal_revision.created_at,
+                for revision_index, revision in enumerate(proposal.revisions):
+                    revision.revision_index = revision_index
+
+                # Create proposal status history
+                statuses = proposal_statuses[proposal.proposal_id]
+                statuses.sort(key=lambda status: status[0])
+
+                prev_status: str | None = None
+                for created_at, status in statuses:
+                    if status != prev_status:
+                        proposal.statuses.append(
+                            ProposalStatus(
+                                project_id=self.project.project_id,
+                                proposal_id=proposal.proposal_id,
+                                status_index=len(proposal.statuses),
+                                normalised_status=ProposalStatus.normalise_status(
+                                    status
+                                ),
+                                raw_status=status,
+                                created_at=created_at,
+                            )
                         )
-                    )
+                        prev_status = status
 
-        return [*proposals.values()]
+        return [
+            proposal
+            for proposal_list in proposals.values()
+            for _, proposal in proposal_list
+        ]
 
     async def get_comments(self) -> Sequence[SQLModel]:
         models: list[Comment] = []
 
         for pull_request in await get_pdep_pull_requests():
+            pull_request_created_at = parser.parse(pull_request["created_at"])
+            if pull_request_created_at > END_DATE:
+                continue
+
             pull_request_number = int(pull_request["number"])
             try:
                 proposal_id = get_proposal_id_from_title(str(pull_request["title"]))
@@ -271,7 +308,7 @@ class PDEPProjectScraper(ProjectScraper):
                 project_id=self.project.project_id,
                 proposal_id=proposal_id,
                 comment_on_comment_id=None,
-                created_at=parser.parse(str(pull_request_details["created_at"])),
+                created_at=pull_request_created_at,
                 content=str(pull_request_details.get("body", "")),
             )
             pull_request_comment.author = pull_request_author
@@ -282,6 +319,10 @@ class PDEPProjectScraper(ProjectScraper):
             )
             comments.sort(key=lambda comment: parser.parse(str(comment["created_at"])))
             for comment_data in comments:
+                comment_created_at = parser.parse(comment_data["created_at"])
+                if comment_created_at > END_DATE:
+                    continue
+
                 author_data = cast(dict[str, Any] | None, comment_data.get("user"))
                 if not author_data or not author_data.get("login"):
                     continue
