@@ -14,3 +14,5 @@ wheels/
 output/
 .pytest_cache/
 .ruff_cache/
+# Scraped third-party content (see README: "Required local data")
+cplusplus/data/cppreference/
