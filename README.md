@@ -1,6 +1,6 @@
 # Open-Source Governance Data Extractors (CSE3000)
 
-This repository contains the suite of Python data scrapers developed for the **CSE3000 Research Project** at Delft University of Technology. The tools are designed to extract structured longitudinal data from Software Enhancement Proposal (SEP) systems and map them into a unified schema to enable cross-project governance analysis.
+This repository contains the suite of data scrapers (written in Python, Java, Kotlin and TypeScript) developed for the **CSE3000 Research Project** at Delft University of Technology. The tools are designed to extract structured longitudinal data from Software Enhancement Proposal (SEP) systems and map them into a unified schema to enable cross-project governance analysis.
 
 The final research papers and project insights will be available on the official project website: [cse3000-research-project.github.io](https://cse3000-research-project.github.io/).
 
